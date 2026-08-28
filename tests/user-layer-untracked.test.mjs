@@ -17,7 +17,7 @@ import { pass, fail, ROOT } from './helpers.mjs';
  * @returns {string[]}
  */
 export function parseUserLayerPaths(markdown) {
-  const section = markdown.match(/^## User Layer \(NEVER auto-updated\)\s*$([\s\S]*?)(?=^##?\s)/m)?.[1];
+  const section = markdown.match(/^## User Layer \(NEVER auto-updated\)\s*$([\s\S]*?)(?=^##?\s|(?![\s\S]))/m)?.[1];
   if (!section) throw new Error('DATA_CONTRACT.md is missing the User Layer section');
 
   const paths = [];
@@ -44,7 +44,7 @@ function toPathspec(path) {
   const wildcard = path.search(/[\*{]/);
   if (wildcard === -1) return path;
   const slash = path.lastIndexOf('/', wildcard);
-  return slash === -1 ? path.slice(0, wildcard) : path.slice(0, slash + 1);
+  return slash === -1 ? '.' : path.slice(0, slash + 1);
 }
 
 /**
@@ -87,6 +87,26 @@ try {
   fail(error.message);
 }
 
+try {
+  const eofContract = [
+    '# Data Contract',
+    '',
+    '## User Layer (NEVER auto-updated)',
+    '',
+    '| File | Purpose |',
+    '|------|---------|',
+    '| `cv.md` | Personal CV |',
+  ].join('\n');
+  const eofPaths = parseUserLayerPaths(eofContract);
+  if (eofPaths.length === 1 && eofPaths[0] === 'cv.md') {
+    pass('parses a User Layer section at end of file');
+  } else {
+    fail(`end-of-file fixture expected only cv.md, got: ${eofPaths.join(', ') || '(none)'}`);
+  }
+} catch (error) {
+  fail(`end-of-file User Layer fixture failed: ${error.message}`);
+}
+
 // Regression fixture: a rule added after a personal file was committed must be
 // detected, while a negated system scaffold inside a protected directory stays
 // allowed.
@@ -100,13 +120,14 @@ try {
 | File | Purpose |
 |------|---------|
 | \`cv.md\` | Personal CV |
+| \`*.md\` | Root-level personal Markdown files |
 | \`documents/*\` | Personal sources; README is system-owned |
 
 ## System Layer
 `);
   writeFileSync(join(fixture, 'cv.md'), 'private');
   writeFileSync(join(fixture, 'documents', 'README.md'), 'scaffold');
-  writeFileSync(join(fixture, '.gitignore'), 'cv.md\ndocuments/*\n!documents/\n!documents/README.md\n');
+  writeFileSync(join(fixture, '.gitignore'), '*.md\n!DATA_CONTRACT.md\ndocuments/*\n!documents/\n!documents/README.md\n');
 
   for (const args of [
     ['init', '-q'],
@@ -120,7 +141,7 @@ try {
   const paths = parseUserLayerPaths(readFileSync(join(fixture, 'DATA_CONTRACT.md'), 'utf-8'));
   const violations = trackedIgnoredUserLayerFiles(fixture, paths);
   if (violations.length === 1 && violations[0] === 'cv.md') {
-    pass('late ignore rules expose tracked personal files without flagging a negated scaffold');
+    pass('root wildcard finds tracked personal files without flagging a negated scaffold');
   } else {
     fail(`fixture expected only cv.md to remain tracked-and-ignored, got: ${violations.join(', ') || '(none)'}`);
   }

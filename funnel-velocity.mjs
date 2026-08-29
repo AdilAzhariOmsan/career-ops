@@ -4,7 +4,9 @@
  *
  * Three payloads, decreasing availability:
  *   1. calibration — own funnel rates (canonical ever* definition imported from
- *      stats.mjs) vs candidate-side market benchmark ranges. Works day one.
+ *      stats.mjs) vs candidate-side market benchmark ranges. Works day one;
+ *      folds status-log history when the ledger is present so a row rejected
+ *      after an interview still counts as having reached Interview (#3493).
  *   2. waiting — in-flight Applied rows and elapsed days vs the typical
  *      first-response window. Per-row factual reporting, not an aggregate claim.
  *   3. velocity — median/p75 days per stage hop, folded from the append-only
@@ -38,7 +40,7 @@ import { readFileSync, existsSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import * as yaml from 'js-yaml';
-import { computeFunnel, computeTrackerStats } from './stats.mjs';
+import { computeFunnel, computeFunnelWithHistory, parseStatusLogStages, trackerStatusByNum, computeTrackerStats } from './stats.mjs';
 import { resolveColumns, parseTrackerRow } from './tracker-parse.mjs';
 import { resolveTrackerPath, loadCanonicalStates, resolveCanonicalState } from './tracker-utils.mjs';
 import { parseAppliedDate, normalizeStatus } from './followup-cadence.mjs';
@@ -272,6 +274,9 @@ export function computeCalibration(funnel, benchmarks) {
     everApplied: funnel.everApplied,
     smallSample,
     claimMinN: CLAIM_MIN_N,
+    // 'ledger' when the ever* counts fold status-log history (rejected-after-
+    // interview rows counted at the stage they reached), 'snapshot' otherwise.
+    basis: funnel.basis === 'ledger' ? 'ledger' : 'snapshot',
     responseRate: classify(funnel.everApplied > 0 ? funnel.responseRate : null, benchmarks.response_rate),
     interviewRate: classify(funnel.everApplied > 0 ? funnel.interviewRate : null, benchmarks.application_to_interview),
   };
@@ -335,7 +340,14 @@ export function parseTrackerRows(content) {
 export function analyze({ trackerContent, logContent, benchmarks, states, todayStr }) {
   const rows = parseTrackerRows(trackerContent);
   const stats = computeTrackerStats(trackerContent);
-  const funnel = computeFunnel(stats.byStatus);
+  // Ledger-aware funnel when the transition log is present: a row now sitting in
+  // a terminal snapshot (Rejected/Discarded) still counts for the middle stages
+  // it passed through, so interviewRate/responseRate stop undercounting rejected-
+  // after-interview rows (#3493). Same canonical definition `node stats.mjs`
+  // uses; falls back to the snapshot funnel when there is no log.
+  const funnel = logContent && logContent.trim()
+    ? computeFunnelWithHistory(trackerStatusByNum(trackerContent), parseStatusLogStages(logContent))
+    : computeFunnel(stats.byStatus);
   const { observations, unparseable, unknownSources } = parseStatusLog(logContent, states);
   const timelines = foldObservations(observations);
 
@@ -407,6 +419,7 @@ export function renderSummary(result, todayStr) {
   } else {
     out.push(fmtCalibrationLine('Response rate', cal.responseRate, cal.smallSample, cal.everApplied));
     out.push(fmtCalibrationLine('Interview rate', cal.interviewRate, cal.smallSample, cal.everApplied));
+    if (cal.basis === 'ledger') out.push('  (rates fold status-log history — a row rejected after an interview still counts as reaching Interview)');
     if (cal.smallSample) out.push(`  (comparative claims need n≥${cal.claimMinN} applied; you have ${cal.everApplied})`);
   }
 
@@ -611,6 +624,34 @@ function selfTest() {
   const below = renderSummary(analyze({ trackerContent: mkTracker(40, 0), logContent: '', benchmarks: bm, states, todayStr: TODAY }), TODAY);
   check(below.includes(BELOW_RANGE_ACTION), 'tone: below-range carries the single action pointer');
   check(below.includes('(2025, directional)'), 'tone: benchmark year + directional attached');
+
+  // -- ledger-aware calibration (#3493): a terminal Rejected snapshot must not
+  // erase the middle stages the row actually reached. Same shape stats.mjs uses. --
+  const ledgerHeader = '| # | Date | Company | Role | Score | Status | PDF | Report | Notes |\n|---|------|---------|------|-------|--------|-----|--------|-------|';
+  const ledgerRows = [];
+  for (let i = 1; i <= 21; i++) ledgerRows.push(`| ${i} | 2026-06-01 | Co${i} | Role | 4.0/5 | Applied | ❌ | - | |`);
+  for (let i = 22; i <= 25; i++) ledgerRows.push(`| ${i} | 2026-06-01 | Co${i} | Role | 4.0/5 | Rejected | ❌ | - | |`);
+  const ledgerTracker = `${ledgerHeader}\n${ledgerRows.join('\n')}`;
+  const ledgerLog = [
+    '22\t2026-06-02\tApplied\tResponded\tset-status\t',
+    '22\t2026-06-09\tResponded\tInterview\tset-status\t',
+    '22\t2026-06-20\tInterview\tRejected\tset-status\t',
+    '23\t2026-06-02\tApplied\tResponded\tset-status\t',
+    '23\t2026-06-09\tResponded\tInterview\tset-status\t',
+    '23\t2026-06-20\tInterview\tRejected\tset-status\t',
+    '24\t2026-06-03\tApplied\tResponded\tset-status\t',
+    '24\t2026-06-18\tResponded\tRejected\tset-status\t',
+  ].join('\n');
+  const snap = analyze({ trackerContent: ledgerTracker, logContent: '', benchmarks: bm, states, todayStr: TODAY });
+  check(snap.calibration.basis === 'snapshot', 'ledger-funnel: no log → snapshot basis');
+  check(snap.calibration.interviewRate.ownPct === 0, `ledger-funnel: snapshot erases interviews reached, got ${snap.calibration.interviewRate.ownPct}`);
+  const led = analyze({ trackerContent: ledgerTracker, logContent: ledgerLog, benchmarks: bm, states, todayStr: TODAY });
+  check(led.calibration.basis === 'ledger', 'ledger-funnel: log present → ledger basis');
+  check(led.calibration.everApplied === 25, `ledger-funnel: everApplied still 25, got ${led.calibration.everApplied}`);
+  check(led.calibration.interviewRate.ownPct === 8, `ledger-funnel: 2/25 reached Interview → 8%, got ${led.calibration.interviewRate.ownPct}`);
+  check(led.calibration.responseRate.ownPct === 12, `ledger-funnel: 3/25 reached Responded → 12%, got ${led.calibration.responseRate.ownPct}`);
+  check(renderSummary(led, TODAY).includes('rates fold status-log history'), 'ledger-funnel: summary flags the folded basis');
+  check(!renderSummary(snap, TODAY).includes('rates fold status-log history'), 'ledger-funnel: snapshot summary carries no fold note');
 
   // -- waiting --
   const waitTracker = [

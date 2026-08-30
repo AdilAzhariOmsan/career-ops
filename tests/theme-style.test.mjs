@@ -121,21 +121,27 @@ try {
     }
   }
 
-  // Regression: the Traditional Chinese locale must honor profile.style.font_family
-  // on the body and the prominent heading/contact surfaces, same contract as the
-  // ja/zh-CN/ko blocks. It was the last CJK block left on a fixed-only stack, with
-  // a duplicated `body` and `.skill-category` selector (#3154).
+  // Regression (#3154 + CodeRabbit review on #3525): the Traditional Chinese
+  // block was the last CJK block on a fixed-only stack, with duplicated `body`
+  // and `.skill-category` selectors. It now uses the ATS-template idiom —
+  // `var(--font-family)` first (profile override / Latin :root default), then
+  // the curated TC faces in the font list, then `sans-serif`. The faces must
+  // NOT sit in `var(--font-family, …)`'s fallback slot: :root always defines
+  // --font-family, so that slot never resolves and the TC stack would be dead.
   {
-    const zhTwSrc = readFileSync(join(ROOT, 'templates/cv-template.html'), 'utf-8');
-    const zhTwBody = zhTwSrc.match(/html\[lang="zh-TW"\]\s+body\s*\{[^}]*\}/s)?.[0] || '';
-    const zhTwHeadings = zhTwSrc.match(/html\[lang="zh-TW"\]\s+\.header h1,[\s\S]*?\{[^}]*\}/)?.[0] || '';
-    const hasProfileFontFallback = (src) => /font-family:\s*var\(--font-family,/.test(src);
-    const hasDuplicateBodySelector = /html\[lang="zh-TW"\]\s+body\s*,\s*html\[lang="zh-TW"\]\s+body\s*\{/.test(zhTwSrc);
-    const zhTwBodyCount = (zhTwSrc.match(/html\[lang="zh-TW"\]\s+body\s*\{/g) || []).length;
-    if (hasProfileFontFallback(zhTwBody) && hasProfileFontFallback(zhTwHeadings) && !hasDuplicateBodySelector && zhTwBodyCount === 1) {
-      pass('Traditional Chinese body/headings honor --font-family theme override without duplicate selector');
+    const src = readFileSync(join(ROOT, 'templates/cv-template.html'), 'utf-8');
+    const body = src.match(/html\[lang="zh-TW"\]\s+body[^{]*\{[^}]*\}/s)?.[0] || '';
+    const headings = src.match(/html\[lang="zh-TW"\]\s+\.header h1,[\s\S]*?\{[^}]*\}/)?.[0] || '';
+    // token first, then the TC faces, terminal sans-serif — not the dead-slot form
+    const wants = (s) => /font-family:\s*var\(--font-family\),\s*'PingFang TC'[\s\S]*'Source Han Sans TC',\s*sans-serif;/.test(s);
+    const deadSlot = /html\[lang="zh-TW"\][\s\S]*?font-family:\s*var\(--font-family,\s*'/.test(src);
+    const dupBody = /html\[lang="zh-TW"\]\s+body\s*,\s*html\[lang="zh-TW"\]\s+body\b/.test(src);
+    const dupSkillCat = /html\[lang="zh-TW"\]\s+\.skill-category,\s*html\[lang="zh-TW"\]\s+\.skill-category\s*\{/.test(src);
+    const bodyCount = (src.match(/html\[lang="zh-TW"\]\s+body\b/g) || []).length;
+    if (wants(body) && wants(headings) && !deadSlot && !dupBody && !dupSkillCat && bodyCount === 1) {
+      pass('Traditional Chinese block leads with var(--font-family), keeps the TC fallback faces, no duplicate selectors');
     } else {
-      fail(`Traditional Chinese theme contract: body=${hasProfileFontFallback(zhTwBody)} headings=${hasProfileFontFallback(zhTwHeadings)} duplicate=${hasDuplicateBodySelector} bodyCount=${zhTwBodyCount}`);
+      fail(`Traditional Chinese theme contract: body=${wants(body)} headings=${wants(headings)} deadSlot=${deadSlot} dupBody=${dupBody} dupSkillCat=${dupSkillCat} bodyCount=${bodyCount}`);
     }
   }
 

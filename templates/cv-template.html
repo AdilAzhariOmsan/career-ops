@@ -588,7 +588,6 @@
   html[lang="ko"] .project-title,
   html[lang="ko"] .contact-row,
   html[lang="ko"] .competency-tag,
-  html[lang="ko"] .skill-category,
   html[lang="ko"] .skill-category {
     font-family: var(--font-family, 'Liberation Sans', 'Helvetica Neue', Arial, 'Apple SD Gothic Neo',
       'Malgun Gothic', 'Noto Sans CJK KR',
@@ -599,11 +598,10 @@
      modes/zh-TW/ ships as a supported locale. html[lang="zh"] does not match
      lang="zh-TW", so it needs its own rule — and it must use TC faces, not the
      Simplified stack above, which substitutes the wrong glyph forms. */
-  html[lang="zh-TW"] body,
   html[lang="zh-TW"] body {
-    font-family: 'Liberation Sans', 'Helvetica Neue', Arial, 'PingFang TC',
+    font-family: var(--font-family, 'Liberation Sans', 'Helvetica Neue', Arial, 'PingFang TC',
       'Microsoft JhengHei', 'Noto Sans CJK TC',
-      'Noto Sans TC', 'Source Han Sans TC', sans-serif;
+      'Noto Sans TC', 'Source Han Sans TC', sans-serif);
     line-break: strict;
     word-break: normal;
     overflow-wrap: break-word;
@@ -615,11 +613,10 @@
   html[lang="zh-TW"] .project-title,
   html[lang="zh-TW"] .contact-row,
   html[lang="zh-TW"] .competency-tag,
-  html[lang="zh-TW"] .skill-category,
   html[lang="zh-TW"] .skill-category {
-    font-family: 'Liberation Sans', 'Helvetica Neue', Arial, 'PingFang TC',
+    font-family: var(--font-family, 'Liberation Sans', 'Helvetica Neue', Arial, 'PingFang TC',
       'Microsoft JhengHei', 'Noto Sans CJK TC',
-      'Noto Sans TC', 'Source Han Sans TC', sans-serif;
+      'Noto Sans TC', 'Source Han Sans TC', sans-serif);
   }
 
   html[lang="zh-CN"] .summary-text,

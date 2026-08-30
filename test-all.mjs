@@ -4655,6 +4655,42 @@ if (scanMode.includes('secondaryLocations') && scanMode.includes('descriptionPla
   fail('scan.md parse conventions drifted from providers/*.mjs — missing secondaryLocations (ashby) or descriptionPlain (lever) that scan.mjs filters consume');
 }
 
+// modes/scan.md documents the scan-history.tsv column layout an agent-driven
+// scan has to reproduce by hand. It drifted once already: the doc said "nine
+// columns" and step 8b spelled out a six-column row while formatScanHistoryRow
+// emits twelve (#3458). Nothing tied the doc to the writer. This asserts the
+// header the doc shows in its ```tsv block is byte-identical to the one
+// appendToScanHistory writes on fresh-file creation, and that step 8b no longer
+// carries the short literal that can drift again.
+{
+  const writerMatch = scanScript.match(/writeFileSync\(SCAN_HISTORY_PATH,\s*'([^']+)'/);
+  const docMatch = scanMode.match(/##\s*Scan History[\s\S]*?```tsv\r?\n([^\r\n]+)\r?\n/);
+  if (!writerMatch) {
+    fail('scan-history header parity: could not find the writeFileSync(SCAN_HISTORY_PATH, ...) header literal in scan.mjs');
+  } else if (!docMatch) {
+    fail('scan-history header parity: could not find the fenced tsv header block under "## Scan History" in modes/scan.md');
+  } else {
+    const writerHeader = writerMatch[1].replace(/\\n$/, '');
+    const writerCols = writerHeader.split('\\t');
+    const docCols = docMatch[1].split('\t');
+    const shortLiteral = scanMode.includes('{company}\\tadded');
+    const missingFromTable = writerCols.filter((c) => !scanMode.includes(`\`${c}\``));
+    if (
+      writerHeader === docCols.join('\\t') &&
+      !shortLiteral &&
+      missingFromTable.length === 0
+    ) {
+      pass(`scan.md documents the scan-history.tsv layout matching formatScanHistoryRow (${writerCols.length} columns, in writer order)`);
+    } else if (shortLiteral) {
+      fail('scan.md step 8b still spells out the pre-#3458 six-column scan-history row (`{company}\\tadded`) — defer to the 12-column format instead');
+    } else if (writerHeader !== docCols.join('\\t')) {
+      fail(`scan.md scan-history tsv header drifted from scan.mjs: doc has [${docCols.join(', ')}], writer emits [${writerCols.join(', ')}]`);
+    } else {
+      fail(`scan.md scan-history column table is missing entries the writer emits: ${missingFromTable.join(', ')}`);
+    }
+  }
+}
+
 if (!fileExists('scripts/parsers/cohere_jobs.py')) {
   pass('Cohere parser example is not bundled as a runtime script');
 } else {

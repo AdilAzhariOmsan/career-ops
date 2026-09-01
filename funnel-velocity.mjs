@@ -340,13 +340,17 @@ export function parseTrackerRows(content) {
 export function analyze({ trackerContent, logContent, benchmarks, states, todayStr }) {
   const rows = parseTrackerRows(trackerContent);
   const stats = computeTrackerStats(trackerContent);
-  // Ledger-aware funnel when the transition log is present: a row now sitting in
-  // a terminal snapshot (Rejected/Discarded) still counts for the middle stages
-  // it passed through, so interviewRate/responseRate stop undercounting rejected-
-  // after-interview rows (#3493). Same canonical definition `node stats.mjs`
-  // uses; falls back to the snapshot funnel when there is no log.
-  const funnel = logContent && logContent.trim()
-    ? computeFunnelWithHistory(trackerStatusByNum(trackerContent), parseStatusLogStages(logContent))
+  // Ledger-aware funnel when the transition log carries usable history: a row now
+  // sitting in a terminal snapshot (Rejected/Discarded) still counts for the
+  // middle stages it passed through, so interviewRate/responseRate stop
+  // undercounting rejected-after-interview rows (#3493). Same canonical
+  // definition `node stats.mjs` uses. Branch on the parsed stages, not the raw
+  // file: a header-only, comment-only, or all-malformed log has no history to
+  // fold, and taking the ledger path anyway would stamp basis:'ledger' on a
+  // funnel identical to the snapshot and print the "rates fold history" note.
+  const ledgerStages = parseStatusLogStages(logContent);
+  const funnel = ledgerStages.length > 0
+    ? computeFunnelWithHistory(trackerStatusByNum(trackerContent), ledgerStages)
     : computeFunnel(stats.byStatus);
   const { observations, unparseable, unknownSources } = parseStatusLog(logContent, states);
   const timelines = foldObservations(observations);
@@ -652,6 +656,52 @@ function selfTest() {
   check(led.calibration.responseRate.ownPct === 12, `ledger-funnel: 3/25 reached Responded → 12%, got ${led.calibration.responseRate.ownPct}`);
   check(renderSummary(led, TODAY).includes('rates fold status-log history'), 'ledger-funnel: summary flags the folded basis');
   check(!renderSummary(snap, TODAY).includes('rates fold status-log history'), 'ledger-funnel: snapshot summary carries no fold note');
+
+  // A log with no *parsed* history — header row, comments, torn rows — must stay
+  // on the snapshot basis: taking the ledger path would stamp basis:'ledger' on
+  // a funnel identical to the snapshot and wrongly print the fold note.
+  for (const [label, emptyLog] of [
+    ['header only', '#\tdate\tfrom\tto\tsource\tnote'],
+    ['comment only', '# migrated 2026-06-01 — no transitions yet'],
+    ['torn rows only', 'x\t2026-06-02\tApplied\tResponded\nx\t2026-06-09\tResponded\tInterview'],
+    ['whitespace', '   \n\t\n'],
+  ]) {
+    const r = analyze({ trackerContent: ledgerTracker, logContent: emptyLog, benchmarks: bm, states, todayStr: TODAY });
+    check(r.calibration.basis === 'snapshot', `ledger-funnel: ${label} log → snapshot basis`);
+    check(r.calibration.interviewRate.ownPct === snap.calibration.interviewRate.ownPct, `ledger-funnel: ${label} log leaves rates on the snapshot value`);
+    check(!renderSummary(r, TODAY).includes('rates fold status-log history'), `ledger-funnel: ${label} log carries no fold note`);
+  }
+
+  // everX counts distinct tracker rows, so a transition the ledger records more
+  // than once (a re-applied set-status, a torn-then-rewritten append) must not
+  // inflate the funnel — the ledger result is identical with each line doubled.
+  const dupLog = ledgerLog.split('\n').flatMap(l => [l, l]).join('\n');
+  const dup = analyze({ trackerContent: ledgerTracker, logContent: dupLog, benchmarks: bm, states, todayStr: TODAY });
+  check(dup.calibration.everApplied === led.calibration.everApplied, `ledger-funnel: duplicated transitions leave everApplied at ${led.calibration.everApplied}, got ${dup.calibration.everApplied}`);
+  check(dup.calibration.interviewRate.ownPct === led.calibration.interviewRate.ownPct, `ledger-funnel: duplicated transitions leave interviewRate at ${led.calibration.interviewRate.ownPct}%, got ${dup.calibration.interviewRate.ownPct}%`);
+  check(dup.calibration.responseRate.ownPct === led.calibration.responseRate.ownPct, `ledger-funnel: duplicated transitions leave responseRate at ${led.calibration.responseRate.ownPct}%, got ${dup.calibration.responseRate.ownPct}%`);
+  // A row that genuinely bounces back and forth is still one row at its deepest
+  // stage — Responded→Interview→Responded→Interview counts once into everInterview.
+  const bounceLog = [
+    '2\t2026-06-02\tApplied\tResponded\tset-status\t',
+    '2\t2026-06-09\tResponded\tInterview\tset-status\t',
+    '2\t2026-06-12\tInterview\tResponded\tset-status\t',
+    '2\t2026-06-15\tResponded\tInterview\tset-status\t',
+  ].join('\n');
+  const bounce = analyze({ trackerContent: ledgerTracker, logContent: bounceLog, benchmarks: bm, states, todayStr: TODAY });
+  check(bounce.calibration.interviewRate.ownPct === 4, `ledger-funnel: a bouncing row counts once → 1/25 = 4%, got ${bounce.calibration.interviewRate.ownPct}`);
+
+  // A current Discarded row with no ledger history stays out of everApplied in
+  // both funnels — Discarded (unlike Rejected) does not by itself prove a
+  // submission, and the ledger path must not silently diverge from the snapshot.
+  const discardTracker = `${ledgerHeader}\n${[
+    ...Array.from({ length: 10 }, (_, i) => `| ${i + 1} | 2026-06-01 | Co${i + 1} | Role | 4.0/5 | Applied | ❌ | - | |`),
+    '| 11 | 2026-06-01 | Co11 | Role | 4.0/5 | Discarded | ❌ | - | |',
+  ].join('\n')}`;
+  const discardSnap = analyze({ trackerContent: discardTracker, logContent: '', benchmarks: bm, states, todayStr: TODAY });
+  const discardLed = analyze({ trackerContent: discardTracker, logContent: '1\t2026-06-05\tApplied\tResponded\tset-status\t', benchmarks: bm, states, todayStr: TODAY });
+  check(discardSnap.calibration.everApplied === 10, `ledger-funnel: snapshot leaves a no-history Discarded row out of everApplied, got ${discardSnap.calibration.everApplied}`);
+  check(discardLed.calibration.everApplied === discardSnap.calibration.everApplied, `ledger-funnel: ledger path agrees with snapshot on a no-history Discarded row, got ${discardLed.calibration.everApplied} vs ${discardSnap.calibration.everApplied}`);
 
   // -- waiting --
   const waitTracker = [

@@ -1290,7 +1290,44 @@ for (const file of tsvFiles) {
       // the same channel (the agency re-blasting one listing) is a duplicate.
       // Via comparison is Unicode-aware (#1603): normalizeCompany() would
       // collapse distinct non-Latin agency names to the same empty key.
-      if ((String(addition.company).trim() === '?' || String(app.company).trim() === '?')
+      //
+      // ON A TRACKER THAT HAS A VIA COLUMN, both vias must be PRESENT and equal,
+      // not merely equal (#3410). Rejecting only on a difference let two empty
+      // ones compare equal, so two unrelated `?` rows with no Via fell through
+      // to the fuzzy title match and merged. Measured: an existing
+      // `? / Program Manager` (4.2, Applied, report [1]) and an unrelated
+      // `? / Senior Program Manager` became ONE row carrying the addition's
+      // date, score, PDF flag and report link, with the surviving note calling
+      // report [1] "Superseded" — which it was not. The tracker is gitignored
+      // and no .bak is written, so nothing recovers it.
+      //
+      // This is the same three-valued logic Pass 0 states above — an absent key
+      // is UNKNOWN, never "equal" — landing the other way here, on purpose.
+      // There, company and role still carry identity, so an unknown URL must not
+      // block a tier that has other evidence. Here the company key is empty BY
+      // CONSTRUCTION: `?` means "employer not disclosed", so a fuzzy role match
+      // is all that is left, and it is not identity. With nothing to tell the
+      // channels apart, not merging is the recoverable answer — a visible
+      // duplicate row the user can fix, rather than a silent overwrite of a row
+      // whose report link now points at a different job.
+      //
+      // GATED ON THE COLUMN EXISTING, because without it every row parses with
+      // via='' and the addition's own tag is cleared on purpose (see the
+      // --migrate-via warning above): empty-vs-empty is then the NORMAL state
+      // for a genuine same-agency re-blast, not a missing signal, and requiring
+      // a value would turn every legacy re-blast into a duplicate row. On that
+      // layout there is nothing to compare, so the pre-existing behaviour
+      // stands and `--migrate-via` is the way to get the guard.
+      if (COLMAP.via != null
+          && (String(addition.company).trim() === '?' || String(app.company).trim() === '?')) {
+        const additionVia = normalizeVia(addition.via || '');
+        const appVia = normalizeVia(app.via || '');
+        if (!additionVia || !appVia || additionVia !== appVia) return false;
+      }
+      // Legacy layout (no Via column): the original difference-only guard, which
+      // is all the information available there.
+      if (COLMAP.via == null
+          && (String(addition.company).trim() === '?' || String(app.company).trim() === '?')
           && normalizeVia(addition.via || '') !== normalizeVia(app.via || '')) return false;
       // Req/job-number guard (#1524): a similarly-worded title at the same
       // company can still be a genuinely distinct posting when a req/job

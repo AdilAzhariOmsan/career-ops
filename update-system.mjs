@@ -8,8 +8,9 @@
  *
  * Usage:
  *   node update-system.mjs check      # Check if update available
- *   node update-system.mjs apply      # Apply update (after user confirms)
- *   node update-system.mjs apply --force
+ *   node update-system.mjs apply --confirm
+ *                                     # Apply update after explicit confirmation
+ *   node update-system.mjs apply --force --confirm
  *                                     # …and overwrite system files this
  *                                     # install edited locally (#2337). Without
  *                                     # it those files are kept and listed.
@@ -20,9 +21,11 @@
  */
 
 import { execFile, execFileSync, execSync } from 'child_process';
-import { copyFileSync, readFileSync, writeFileSync, existsSync, unlinkSync, rmSync, lstatSync, realpathSync } from 'fs';
-import { join, dirname, resolve, posix as pathPosix } from 'path';
-import { fileURLToPath } from 'url';
+import { copyFileSync, readFileSync, writeFileSync, existsSync, unlinkSync, rmSync, lstatSync, mkdtempSync, realpathSync } from 'fs';
+import { join, dirname, basename, resolve, posix as pathPosix } from 'path';
+import { tmpdir } from 'os';
+import { randomBytes, timingSafeEqual } from 'crypto';
+import { fileURLToPath, pathToFileURL } from 'url';
 
 // NOTE: this file must stay *self-loading* — no static (top-level) relative
 // imports. A pre-#1245 client's apply() self-reexec checks out ONLY
@@ -36,6 +39,67 @@ import { fileURLToPath } from 'url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = __dirname;
+
+export function createReexecMarker() {
+  const directory = realpathSync(mkdtempSync(join(tmpdir(), 'career-ops-reexec-')));
+  const path = join(directory, 'marker');
+  const token = randomBytes(32).toString('hex');
+  writeFileSync(path, token, { encoding: 'utf8', mode: 0o600 });
+  return { path, token };
+}
+
+export function consumeReexecMarker() {
+  const suppliedPath = process.env.CAREER_OPS_UPDATE_REEXEC_MARKER;
+  const token = process.env.CAREER_OPS_UPDATE_REEXEC_TOKEN;
+  if (!suppliedPath || !token) {
+    return false;
+  }
+  try {
+    const tmpRoot = realpathSync(tmpdir());
+    const path = resolve(suppliedPath);
+    const parent = dirname(path);
+    if (dirname(parent) !== tmpRoot || !basename(parent).startsWith('career-ops-reexec-') || basename(path) !== 'marker') {
+      return false;
+    }
+    if (realpathSync(parent) !== parent || !lstatSync(parent).isDirectory() ||
+        realpathSync(path) !== path || !lstatSync(path).isFile()) {
+      return false;
+    }
+    const expected = readFileSync(path, 'utf8');
+    const expectedBuffer = Buffer.from(expected);
+    const tokenBuffer = Buffer.from(token);
+    const valid = expectedBuffer.length === tokenBuffer.length && timingSafeEqual(expectedBuffer, tokenBuffer);
+    unlinkSync(path);
+    rmSync(dirname(path), { recursive: true, force: true });
+    return valid;
+  } catch {
+    return false;
+  }
+}
+
+function isLegacyReexec() {
+  if (process.env.CAREER_OPS_UPDATE_REEXEC !== '1') {
+    return false;
+  }
+  // A matching backup branch is durable state, not proof that a parent updater
+  // is currently running. Legacy children have no authenticated marker, so
+  // the parent's active update lock is the remaining proof of a real reexec.
+  if (!existsSync(join(ROOT, '.update-lock'))) {
+    return false;
+  }
+  const backupBranch = process.env.CAREER_OPS_UPDATE_BACKUP_BRANCH || '';
+  if (!/^backup-pre-update-\d+\.\d+\.\d+-\d{8}T\d{6}Z$/.test(backupBranch)) {
+    return false;
+  }
+  try {
+    execFileSync('git', [
+      'show-ref', '--verify', '--quiet', `refs/heads/${backupBranch}`,
+    ], { cwd: ROOT, stdio: 'ignore' });
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 const CANONICAL_REPO = 'https://github.com/career-ops-hq/career-ops.git';
 const RAW_VERSION_URL = 'https://raw.githubusercontent.com/career-ops-hq/career-ops/main/VERSION';
@@ -1897,16 +1961,28 @@ export function reconcileGitignore(localText, upstreamText) {
 async function apply() {
   assertOwnGitToplevel();
   const local = localVersion();
-  // --force overwrites system files this install edited locally (#2337). The
-  // env var carries the flag across the self-reexec, which re-invokes the
-  // TARGET updater as `update-system.mjs apply` with a fixed argv.
-  const updateForce = process.argv.includes('--force') || process.env.CAREER_OPS_UPDATE_FORCE === '1';
+  // Environment variables are a private one-use channel for the self-reexec;
+  // they must not authorize the initial invocation (#2866).
+  const legacyReexec = isLegacyReexec();
+  const isReexec = consumeReexecMarker() || legacyReexec ||
+    (process.argv.includes('--confirm') && process.env.CAREER_OPS_UPDATE_REEXEC === '1');
+  const updateForce = process.argv.includes('--force') ||
+    (isReexec && process.env.CAREER_OPS_UPDATE_FORCE === '1');
+  const updateConfirmed = process.argv.includes('--confirm') ||
+    (isReexec && (process.env.CAREER_OPS_UPDATE_CONFIRM === '1' || legacyReexec));
   const initialStatusPaths = new Set(gitStatusEntries().map(entry => entry.path));
   // Backups created by this apply run are expected updater output, not user
   // files the checkout modified. Record only successful copies so an unrelated
   // pre-existing .bak can never receive this exemption.
   const generatedBackupPaths = new Set();
-  const isReexec = process.env.CAREER_OPS_UPDATE_REEXEC === '1';
+
+  if (!updateConfirmed) {
+    throw new Error(
+      `Installation requires explicit confirmation. Re-run with ` +
+      `\`node update-system.mjs apply${updateForce ? ' --force' : ''} --confirm\`. ` +
+      'A scheduled update check never installs files.',
+    );
+  }
 
   // Check for lock
   const lockFile = join(ROOT, '.update-lock');
@@ -1968,15 +2044,28 @@ async function apply() {
           console.log('');
         }
         git('checkout', 'FETCH_HEAD', '--', ...reexecFiles);
-        execFileSync(process.execPath, ['update-system.mjs', 'apply'], {
+        const marker = createReexecMarker();
+        execFileSync(process.execPath, [
+          'update-system.mjs',
+          'apply',
+          '--confirm',
+          ...(updateForce ? ['--force'] : []),
+        ], {
           cwd: ROOT,
           stdio: 'inherit',
           timeout,
           env: {
             ...process.env,
+            CAREER_OPS_UPDATE_REEXEC_MARKER: marker.path,
+            CAREER_OPS_UPDATE_REEXEC_TOKEN: marker.token,
+            // Compatibility for target updaters before the authenticated
+            // marker was introduced; only the authenticated child receives it.
             CAREER_OPS_UPDATE_REEXEC: '1',
             CAREER_OPS_UPDATE_BACKUP_BRANCH: backupBranch,
             ...(updateForce ? { CAREER_OPS_UPDATE_FORCE: '1' } : {}),
+            // Keep the legacy confirmation channel for older target updaters;
+            // this process still requires the authenticated marker above.
+            CAREER_OPS_UPDATE_CONFIRM: '1',
           },
         });
         return;
@@ -2031,7 +2120,7 @@ async function apply() {
       } else {
         preservedPaths.push(...atRisk);
         console.log('Keeping your versions. They will NOT receive upstream changes.');
-        console.log('Re-run with `node update-system.mjs apply --force` to take the upstream version instead.');
+        console.log('Re-run with `node update-system.mjs apply --force --confirm` to take the upstream version instead.');
       }
       console.log('');
     }
@@ -2411,7 +2500,7 @@ async function apply() {
       console.error(`${unmaterialized.length} path(s) from the target manifest were not checked out:`);
       for (const path of unmaterialized) console.error(`  ${path}`);
       console.error('\nThis happens when the installed updater predates the paths the target adds.');
-      console.error('Run `node update-system.mjs apply` again — the updater itself is now current,');
+      console.error('Run `node update-system.mjs apply --confirm` again — the updater itself is now current,');
       console.error('so the second pass uses the target manifest and picks up what this one missed.');
       process.exit(1);
     }
@@ -2576,7 +2665,7 @@ if (isCli) {
       case 'rollback': rollback(); break;
       case 'dismiss': dismiss(); break;
       default:
-        console.log('Usage: node update-system.mjs [check|apply [--force]|rollback|dismiss]');
+        console.log('Usage: node update-system.mjs [check|apply --confirm [--force]|rollback|dismiss]');
         process.exit(1);
     }
   } catch (err) {

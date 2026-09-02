@@ -13580,7 +13580,9 @@ try {
     fail('section-count check did not flag a CV with too few sections');
   }
 
-  // CJK content must be rejected with actionable guidance.
+  // CJK content must be rejected with actionable guidance when no CJK-capable
+  // engine/template is in play (pdflatex-only, or no engine resolved at all —
+  // whatever this CI box actually has on PATH).
   const cjk = latexValidate(baseTex('職務経歴'));
   if (cjk && cjk.issues.some((i) => /CJK/.test(i)) && cjk.valid === false) {
     pass('CJK content is rejected with guidance to use pdf mode');
@@ -13589,6 +13591,129 @@ try {
   }
 } catch (e) {
   fail(`LaTeX validator i18n test crashed: ${e.message}`);
+}
+
+// ── 20a. LATEX CJK TEMPLATE (tectonic path, #3553) ──────────────
+// This drives validateLatexContent() directly with a forced `engine` value
+// so the tectonic-vs-pdflatex branch is deterministic regardless of what
+// LaTeX engine (if any) is actually installed on the machine running the
+// suite — see generate-latex.mjs's resolveLatexEngine()/CJK_PACKAGE_RE.
+
+console.log('\n20a. LaTeX CJK template (tectonic engine path)');
+
+try {
+  const { validateLatexContent } = await import(pathToFileURL(join(ROOT, 'generate-latex.mjs')).href);
+
+  const cjkTemplatePath = join(ROOT, 'templates', 'cv-template.cjk.tex');
+  if (fileExists(join('templates', 'cv-template.cjk.tex'))) {
+    pass('templates/cv-template.cjk.tex exists');
+  } else {
+    fail('templates/cv-template.cjk.tex is missing');
+  }
+  const cjkTemplateSrc = existsSync(cjkTemplatePath) ? readFileSync(cjkTemplatePath, 'utf-8') : '';
+  if (/\\usepackage\{fontspec\}/.test(cjkTemplateSrc) && /\\usepackage\{xeCJK\}/.test(cjkTemplateSrc) && /\\setCJKmainfont\{/.test(cjkTemplateSrc)) {
+    pass('cv-template.cjk.tex loads fontspec + xeCJK + a CJK main font');
+  } else {
+    fail('cv-template.cjk.tex is missing fontspec/xeCJK/\\setCJKmainfont');
+  }
+  // Same required commands/placeholders as the base template — it must stay
+  // a drop-in variant, not a divergent structure.
+  const requiredTokens = ['\\resumeSubheading', '\\resumeItem', '\\resumeProjectHeading', '{{NAME}}', '{{EDUCATION}}', '{{EXPERIENCE}}', '{{PROJECTS}}', '{{AWARDS}}', '{{SKILLS}}'];
+  const missingTokens = requiredTokens.filter((t) => !cjkTemplateSrc.includes(t));
+  if (cjkTemplateSrc && missingTokens.length === 0) {
+    pass('cv-template.cjk.tex keeps the same required commands/placeholders as the base template');
+  } else {
+    fail(`cv-template.cjk.tex is missing tokens: ${JSON.stringify(missingTokens)}`);
+  }
+
+  const cjkFilledTemplate = () => cjkTemplateSrc
+    .replace(/\{\{NAME\}\}/g, 'Test Candidate')
+    .replace(/\{\{CONTACT_LINE\}\}/g, 'Toronto, ON')
+    .replace(/\{\{EMAIL_URL\}\}/g, 'test@example.com')
+    .replace(/\{\{EMAIL_DISPLAY\}\}/g, 'test@example.com')
+    .replace(/\{\{LINKEDIN_URL\}\}/g, 'https://linkedin.com/in/test')
+    .replace(/\{\{LINKEDIN_DISPLAY\}\}/g, 'linkedin.com/in/test')
+    .replace(/\{\{GITHUB_URL\}\}/g, 'https://github.com/test')
+    .replace(/\{\{GITHUB_DISPLAY\}\}/g, 'github.com/test')
+    .replace(/\{\{EDUCATION\}\}/g, '    \\resumeSubheading\n      {示例大学}{Toronto, ON}\n      {计算机科学硕士学位}{2023 - 2025}')
+    .replace(/\{\{EXPERIENCE\}\}/g, '    \\resumeSubheading\n      {示例公司}{2022 - Present}\n      {软件工程师}{Remote}\n      \\resumeItemListStart\n            \\resumeItem{设计并交付了多个内部工具}\n      \\resumeItemListEnd')
+    .replace(/\{\{PROJECTS\}\}/g, '    \\resumeProjectHeading\n      {\\textbf{示例项目}}{2024}\n      \\resumeItemListStart\n            \\resumeItem{构建了一个交互式数据分析平台}\n      \\resumeItemListEnd')
+    .replace(/\{\{AWARDS\}\}/g, '    \\resumeProjectHeading\n      {\\textbf{优秀毕业生奖}}{2024}')
+    .replace(/\{\{SKILLS\}\}/g, '        \\textbf{语言}{: 中文，英语} \\\\');
+
+  // A CJK-filled cv-template.cjk.tex, resolved to tectonic, must NOT be
+  // blocked — the whole point of #3553 is that this path now compiles.
+  const filled = cjkFilledTemplate();
+  const tectonicCjk = validateLatexContent(filled, false, 'tectonic');
+  if (tectonicCjk.issues.length === 0) {
+    pass('CJK content + xeCJK template + tectonic engine validates clean (no CJK block)');
+  } else {
+    fail(`CJK content + xeCJK template + tectonic engine was unexpectedly blocked: ${JSON.stringify(tectonicCjk.issues)}`);
+  }
+
+  // CJK content on tectonic WITHOUT the CJK package loaded (e.g. someone
+  // pastes CJK text into the base cv-template.tex) must still be blocked,
+  // but with guidance pointing at --template=cjk instead of only "use pdf mode".
+  const baseTemplateWithCjk = baseTex('職務経歴');
+  const tectonicNoPackage = validateLatexContent(baseTemplateWithCjk, false, 'tectonic');
+  if (tectonicNoPackage.issues.some((i) => /CJK/.test(i) && /--template=cjk/.test(i))) {
+    pass('CJK content on tectonic without xeCJK/ctex loaded is blocked with --template=cjk guidance');
+  } else {
+    fail(`CJK content on tectonic without CJK package was not blocked with the expected guidance: ${JSON.stringify(tectonicNoPackage.issues)}`);
+  }
+
+  // The pdflatex-only guard must not regress: even the CJK-aware template
+  // (xeCJK loaded) stays blocked when the resolved engine is pdflatex, since
+  // pdflatex has no Unicode/CJK font support regardless of packages loaded.
+  const pdflatexCjk = validateLatexContent(filled, false, 'pdflatex');
+  if (pdflatexCjk.issues.some((i) => /CJK/.test(i))) {
+    pass('CJK content stays blocked on pdflatex even with the CJK template (pdflatex cannot render CJK)');
+  } else {
+    fail(`CJK content should stay blocked on pdflatex: ${JSON.stringify(pdflatexCjk.issues)}`);
+  }
+
+  // No engine resolved at all (engine=null) — same as the pre-#3553 default.
+  const noEngineCjk = validateLatexContent(filled, false, null);
+  if (noEngineCjk.issues.some((i) => /CJK/.test(i))) {
+    pass('CJK content stays blocked when no LaTeX engine is resolved');
+  } else {
+    fail(`CJK content should stay blocked with no engine resolved: ${JSON.stringify(noEngineCjk.issues)}`);
+  }
+
+  // Supplementary-plane ideographs (CJK Unified Ideographs Extension B and
+  // later, e.g. U+20000) must be caught too, not just the BMP ranges — a
+  // codepoint-range regex without the `u` flag only ever sees lone UTF-16
+  // surrogate halves for these and silently misses them (CodeRabbit finding).
+  const supplementaryChar = String.fromCodePoint(0x20000);
+  const supplementaryCjk = validateLatexContent(baseTex(supplementaryChar), false, null);
+  if (supplementaryCjk.issues.some((i) => /CJK/.test(i))) {
+    pass('supplementary-plane CJK ideograph (U+20000) is detected, not just BMP CJK');
+  } else {
+    fail(`supplementary-plane CJK ideograph (U+20000) was not detected: ${JSON.stringify(supplementaryCjk.issues)}`);
+  }
+
+  // CJK_PACKAGE_RE must recognize xeCJK/ctex as part of a comma-separated
+  // \usepackage list, not only as the package's sole argument.
+  const listFormTex = baseTex('職務経歴').replace('\\documentclass{article}', '\\documentclass{article}\n\\usepackage{fontspec,xeCJK}');
+  const listFormResult = validateLatexContent(listFormTex, false, 'tectonic');
+  if (listFormResult.issues.length === 0) {
+    pass('\\usepackage{fontspec,xeCJK} (comma-separated list) is recognized as loading xeCJK');
+  } else {
+    fail(`comma-separated \\usepackage list with xeCJK was not recognized: ${JSON.stringify(listFormResult.issues)}`);
+  }
+
+  // CJK_PACKAGE_RE must also recognize the ctex bundle's own document classes
+  // (ctexart/ctexrep/ctexbook), which auto-configure CJK support without a
+  // separate \usepackage{xeCJK} line.
+  const ctexClassTex = baseTex('職務経歴').replace('\\documentclass{article}', '\\documentclass[fontset=windows]{ctexart}');
+  const ctexClassResult = validateLatexContent(ctexClassTex, false, 'tectonic');
+  if (ctexClassResult.issues.length === 0) {
+    pass('\\documentclass{ctexart} (ctex document class) is recognized as CJK-capable');
+  } else {
+    fail(`ctex document class was not recognized as CJK-capable: ${JSON.stringify(ctexClassResult.issues)}`);
+  }
+} catch (e) {
+  fail(`LaTeX CJK template test crashed: ${e.message}`);
 }
 
 // ── 20b. LATEX-TEX IN-PLACE TAILORING ───────────────────────────

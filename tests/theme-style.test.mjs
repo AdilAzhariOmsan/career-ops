@@ -121,6 +121,30 @@ try {
     }
   }
 
+  // Regression (#3154 + CodeRabbit review on #3525): the Traditional Chinese
+  // block was the last CJK block on a fixed-only stack, with duplicated `body`
+  // and `.skill-category` selectors. It now uses the ATS-template idiom —
+  // `var(--font-family)` first (profile override / Latin :root default), then
+  // the curated TC faces in the font list, then `sans-serif`. The faces must
+  // NOT sit in `var(--font-family, …)`'s fallback slot: :root always defines
+  // --font-family, so that slot never resolves and the TC stack would be dead.
+  {
+    const src = readFileSync(join(ROOT, 'templates/cv-template.html'), 'utf-8');
+    const body = src.match(/html\[lang="zh-TW"\]\s+body[^{]*\{[^}]*\}/s)?.[0] || '';
+    const headings = src.match(/html\[lang="zh-TW"\]\s+\.header h1,[\s\S]*?\{[^}]*\}/)?.[0] || '';
+    // token first, then the TC faces, terminal sans-serif — not the dead-slot form
+    const wants = (s) => /font-family:\s*var\(--font-family\),\s*'PingFang TC'[\s\S]*'Source Han Sans TC',\s*sans-serif;/.test(s);
+    const deadSlot = /html\[lang="zh-TW"\][\s\S]*?font-family:\s*var\(--font-family,\s*'/.test(src);
+    const dupBody = /html\[lang="zh-TW"\]\s+body\s*,\s*html\[lang="zh-TW"\]\s+body\b/.test(src);
+    const dupSkillCat = /html\[lang="zh-TW"\]\s+\.skill-category,\s*html\[lang="zh-TW"\]\s+\.skill-category\s*\{/.test(src);
+    const bodyCount = (src.match(/html\[lang="zh-TW"\]\s+body\b/g) || []).length;
+    if (wants(body) && wants(headings) && !deadSlot && !dupBody && !dupSkillCat && bodyCount === 1) {
+      pass('Traditional Chinese block leads with var(--font-family), keeps the TC fallback faces, no duplicate selectors');
+    } else {
+      fail(`Traditional Chinese theme contract: body=${wants(body)} headings=${wants(headings)} deadSlot=${deadSlot} dupBody=${dupBody} dupSkillCat=${dupSkillCat} bodyCount=${bodyCount}`);
+    }
+  }
+
   // Regression (post-review, #1837): injectPrintPageCss's @page rule used to
   // hardcode `margin: 0.6in`, which — injected last, right before </head> — won
   // the CSS cascade over the template's own `@page { margin: var(--page-margin) }`

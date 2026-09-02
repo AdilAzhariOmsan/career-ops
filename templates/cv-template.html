@@ -588,7 +588,6 @@
   html[lang="ko"] .project-title,
   html[lang="ko"] .contact-row,
   html[lang="ko"] .competency-tag,
-  html[lang="ko"] .skill-category,
   html[lang="ko"] .skill-category {
     font-family: var(--font-family, 'Liberation Sans', 'Helvetica Neue', Arial, 'Apple SD Gothic Neo',
       'Malgun Gothic', 'Noto Sans CJK KR',
@@ -598,10 +597,15 @@
   /* === Traditional Chinese typography ===
      modes/zh-TW/ ships as a supported locale. html[lang="zh"] does not match
      lang="zh-TW", so it needs its own rule — and it must use TC faces, not the
-     Simplified stack above, which substitutes the wrong glyph forms. */
-  html[lang="zh-TW"] body,
+     Simplified stack above, which substitutes the wrong glyph forms.
+     var(--font-family) leads (profile override / Latin :root default), then the
+     TC faces sit in the font list itself — NOT in var()'s fallback slot, which
+     is dead because :root always defines --font-family. Same shape as
+     templates/ats/cv-template.ats.html. (The ja/zh-CN/ko blocks above still use
+     the older `var(--font-family, …)` form and have the same dead-slot bug —
+     out of scope here, tracked separately.) */
   html[lang="zh-TW"] body {
-    font-family: 'Liberation Sans', 'Helvetica Neue', Arial, 'PingFang TC',
+    font-family: var(--font-family), 'PingFang TC',
       'Microsoft JhengHei', 'Noto Sans CJK TC',
       'Noto Sans TC', 'Source Han Sans TC', sans-serif;
     line-break: strict;
@@ -615,9 +619,8 @@
   html[lang="zh-TW"] .project-title,
   html[lang="zh-TW"] .contact-row,
   html[lang="zh-TW"] .competency-tag,
-  html[lang="zh-TW"] .skill-category,
   html[lang="zh-TW"] .skill-category {
-    font-family: 'Liberation Sans', 'Helvetica Neue', Arial, 'PingFang TC',
+    font-family: var(--font-family), 'PingFang TC',
       'Microsoft JhengHei', 'Noto Sans CJK TC',
       'Noto Sans TC', 'Source Han Sans TC', sans-serif;
   }

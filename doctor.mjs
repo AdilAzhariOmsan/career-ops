@@ -569,10 +569,20 @@ function checkPipelineFile() {
 
 // Discover plugins + their non-secret config block, synchronously. Used by both
 // the human check and the --json onboarding state.
+// A parse failure is REPORTED, not folded into {}. An unreadable config and a
+// config with nothing enabled produced the same empty object, so doctor — the
+// one tool whose job is to say what is wrong — answered "off" for every plugin
+// the user had actually switched on, and said nothing about why.
+//
+// Returns the config plus the parse error, so callers can tell the two apart.
 function readPluginConfigSync(root) {
   const cfgPath = join(root, 'config', 'plugins.yml');
-  if (!existsSync(cfgPath)) return {};
-  try { return yaml.load(readFileSync(cfgPath, 'utf8')) || {}; } catch { return {}; }
+  if (!existsSync(cfgPath)) return { cfg: {}, error: null };
+  try {
+    return { cfg: yaml.load(readFileSync(cfgPath, 'utf8')) || {}, error: null };
+  } catch (err) {
+    return { cfg: {}, error: String(err.message).split('\n')[0] };
+  }
 }
 
 // Plugin layer health: list discovered plugins + whether each enabled one's keys
@@ -581,7 +591,17 @@ function checkPlugins(root) {
   let manifests;
   try { manifests = discoverPlugins(pluginRoots(root)); } catch { return { pass: true, label: 'Plugins: none' }; }
   if (manifests.length === 0) return { pass: true, label: 'Plugins: none installed' };
-  const cfg = readPluginConfigSync(root);
+  const { cfg, error: cfgError } = readPluginConfigSync(root);
+  // Reported before the per-plugin lines, because when the config did not parse
+  // every one of those lines is derived from an empty object and says "off"
+  // regardless of what the user configured.
+  if (cfgError) {
+    return {
+      warn: true,
+      label: `Plugins: config/plugins.yml did not parse (${cfgError}) — every plugin below reads as off`,
+      fix: ['Fix the YAML in config/plugins.yml. Until then `plugins.mjs enable/disable` will refuse to write to it.'],
+    };
+  }
   const lines = [];
   const fixes = [];
   for (const m of manifests) {
@@ -787,8 +807,12 @@ function onboardingState(root) {
     : {};
 
   let plugins = [];
+  let pluginConfigError = null;
   try {
-    const cfg = readPluginConfigSync(root);
+    const { cfg, error } = readPluginConfigSync(root);
+    // Travels in the JSON so a consumer can tell "nothing enabled" from "the
+    // config did not parse" — the two used to be the same empty list.
+    pluginConfigError = error;
     plugins = discoverPlugins(pluginRoots(root)).map((m) => {
       const s = pluginStatus(m, cfg);
       return { id: m.id, hooks: m.hooks, enabled: s.enabled, missingEnv: s.missingEnv };
@@ -805,6 +829,9 @@ function onboardingState(root) {
     warnings,
     autoCopied,
     plugins,
+    // Only present when it happened, so existing consumers see no new key on a
+    // healthy run and a broken config is impossible to read as "none enabled".
+    ...(pluginConfigError ? { pluginConfigError } : {}),
     playwright_mcp: playwrightMcp,
     active_cli: activeCli,
     cli_source: cliSource,

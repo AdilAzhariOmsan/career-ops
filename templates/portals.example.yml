@@ -1118,6 +1118,13 @@ search_queries:
 #   provider: deutschebahn                # optional — db.jobs host also auto-detects
 #   enabled: true
 #
+# - name: Garena                          # single-company; public zero-auth POST API
+#   careers_url: https://careers.garena.com/global   # auto-detects on careers.garena.com
+#   provider: garena                      # optional — careers.garena.com host also auto-detects
+#   garena:
+#     office: global                      # optional — sent as the API office parameter and reused in job URLs; no client-side filtering
+#   enabled: true
+#
 # - name: Heckler & Koch                  # single-company; SSR Nuxt vacancy list
 #   careers_url: https://www.heckler-koch.com/de/Karriere/Stellenangebote
 #   provider: hecklerkoch                 # optional — heckler-koch.com host also auto-detects

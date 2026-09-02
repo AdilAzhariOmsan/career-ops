@@ -37,7 +37,23 @@
  *   node scan.mjs --help                       # print this usage block and exit
  */
 
-import { readFileSync, writeFileSync, appendFileSync, existsSync, mkdirSync } from 'fs';
+import {
+  appendFileSync,
+  closeSync,
+  existsSync,
+  fchmodSync,
+  fsyncSync,
+  lstatSync,
+  mkdirSync,
+  openSync,
+  readFileSync,
+  realpathSync,
+  renameSync,
+  statSync,
+  unlinkSync,
+  writeFileSync,
+} from 'fs';
+import { randomUUID } from 'crypto';
 import { fileURLToPath } from 'url';
 import path from 'path';
 import * as yaml from 'js-yaml';
@@ -104,6 +120,48 @@ try {
 }
 
 const CONCURRENCY = 10;
+
+export function isIgnorableDirectoryFsyncError(err, platform = process.platform) {
+  return ['EINVAL', 'ENOTSUP', 'ENOSYS'].includes(err?.code)
+    || (platform === 'win32' && ['EACCES', 'EPERM'].includes(err?.code));
+}
+
+export function atomicWriteFile(filePath, text) {
+  const fileStat = lstatSync(filePath, { throwIfNoEntry: false });
+  const targetPath = fileStat?.isSymbolicLink() ? realpathSync(filePath) : filePath;
+  const tempPath = `${targetPath}.tmp-${process.pid}-${randomUUID()}`;
+  let fd = null;
+  let directoryFd = null;
+  try {
+    const existingMode = existsSync(targetPath) ? statSync(targetPath).mode & 0o7777 : null;
+    fd = openSync(tempPath, 'wx', 0o600);
+    if (existingMode !== null) fchmodSync(fd, existingMode);
+    writeFileSync(fd, text, 'utf-8');
+    fsyncSync(fd);
+    closeSync(fd);
+    fd = null;
+    renameSync(tempPath, targetPath);
+    try {
+      directoryFd = openSync(path.dirname(targetPath), 'r');
+      fsyncSync(directoryFd);
+    } catch (err) {
+      if (!isIgnorableDirectoryFsyncError(err)) throw err;
+    } finally {
+      if (directoryFd !== null) closeSync(directoryFd);
+      directoryFd = null;
+    }
+  } catch (err) {
+    if (fd !== null) closeSync(fd);
+    if (directoryFd !== null) closeSync(directoryFd);
+    try { unlinkSync(tempPath); } catch { /* best effort */ }
+    throw err;
+  }
+}
+
+export function emitJsonReceipt(receipt, exitCode) {
+  process.stdout.write(`${JSON.stringify(receipt)}\n`);
+  process.exitCode = exitCode;
+}
 
 // Provider loading + routing live in providers/_registry.mjs so the portal
 // health check (verify-portals.mjs) can reuse the exact same layer without
@@ -1944,11 +2002,9 @@ export async function appendToPipeline(offers, { pipelinePath = PIPELINE_PATH } 
 
   await withPipelineLock(pipelinePath, async () => {
     // Auto-create with standard skeleton if missing (fresh-install guard).
-    if (!existsSync(pipelinePath)) {
-      writeFileSync(pipelinePath, PIPELINE_SKELETON, 'utf-8');
-    }
-
-    let text = readFileSync(pipelinePath, 'utf-8');
+    let text = existsSync(pipelinePath)
+      ? readFileSync(pipelinePath, 'utf-8')
+      : PIPELINE_SKELETON;
 
     const marker = PENDING_MARKERS.find(m => text.includes(m)) ?? null;
     const idx = marker !== null ? text.indexOf(marker) : -1;
@@ -1972,7 +2028,7 @@ export async function appendToPipeline(offers, { pipelinePath = PIPELINE_PATH } 
       text = text.slice(0, insertAt) + block + text.slice(insertAt);
     }
 
-    writeFileSync(pipelinePath, text, 'utf-8');
+    atomicWriteFile(pipelinePath, text);
   });
 }
 
@@ -1999,7 +2055,7 @@ export async function appendToScanHistory(offers, date, status = 'added') {
     // outcomes (`skipped_expired`, etc.) without the legacy `(expired)` suffix.
     if (!existsSync(SCAN_HISTORY_PATH)) {
       mkdirSync(path.dirname(SCAN_HISTORY_PATH), { recursive: true });
-      writeFileSync(SCAN_HISTORY_PATH, 'url\tfirst_seen\tportal\ttitle\tcompany\tstatus\tlocation\tfingerprint\tposted_at\ttrust_score\ttrust_flags\tnormalized_company\n', 'utf-8');
+      atomicWriteFile(SCAN_HISTORY_PATH, 'url\tfirst_seen\tportal\ttitle\tcompany\tstatus\tlocation\tfingerprint\tposted_at\ttrust_score\ttrust_flags\tnormalized_company\n');
     }
 
     const lines = offers.map(o => formatScanHistoryRow(o, date, status)).join('\n') + '\n';
@@ -2110,7 +2166,7 @@ export function appendScanRunSummary(c, filePath = SCAN_RUNS_PATH) {
   // neighbouring counter. Surface the mismatch here rather than papering over it — rewriting the
   // header in place would misalign every historical row instead.
   if (!existsSync(filePath)) {
-    writeFileSync(filePath, SCAN_RUNS_HEADER, 'utf-8');
+    atomicWriteFile(filePath, SCAN_RUNS_HEADER);
   } else {
     const onDisk = (readFileSync(filePath, 'utf-8').split('\n', 1)[0] || '') + '\n';
     if (onDisk !== SCAN_RUNS_HEADER) {
@@ -2161,7 +2217,7 @@ export const PORTAL_HEALTH_HEADER = 'timestamp\tcompany\tstatus\n';
 export async function appendPortalHealth(healthRecords, filePath = PORTAL_HEALTH_PATH) {
   await withPortalHealthLock(filePath, async () => {
     mkdirSync(path.dirname(filePath), { recursive: true });
-    if (!existsSync(filePath)) writeFileSync(filePath, PORTAL_HEALTH_HEADER, 'utf-8');
+    if (!existsSync(filePath)) atomicWriteFile(filePath, PORTAL_HEALTH_HEADER);
     let lines = '';
     for (const r of healthRecords) {
       lines += [r.timestamp, r.company, r.status].join('\t') + '\n';
@@ -2351,7 +2407,7 @@ function guardStatusFor(code) {
 const KNOWN_FLAGS = [
   '--dry-run', '--verify', '--headed-fallback', '--throttle', '--rediscover-404',
   '--include-blacklisted', '--company', '--posted-after', '--posted-before',
-  '--since', '--quiet', '--help', '-h',
+  '--since', '--quiet', '--json', '--help', '-h',
 ];
 
 // Flags whose space-separated value is the NEXT argv token (the `--flag=value`
@@ -2373,6 +2429,7 @@ const USAGE = `Usage:
   node scan.mjs --since 7                    # postings from the last 7 days
   node scan.mjs --posted-after 2026-07-01    # absolute lower bound on posting date
   node scan.mjs --posted-before 2026-08-01   # absolute upper bound on posting date
+  node scan.mjs --json                       # emit one machine-readable receipt on stdout
   node scan.mjs --quiet                      # suppress the manifesto footer
   node scan.mjs --help                       # print this usage block and exit`;
 
@@ -2380,6 +2437,8 @@ async function main() {
   const args = process.argv.slice(2);
   validateFlags(args, KNOWN_FLAGS, USAGE, { valueFlags: VALUE_FLAGS });
   const dryRun = args.includes('--dry-run');
+  const jsonMode = args.includes('--json');
+  if (jsonMode) console.log = console.error.bind(console);
   const verify = args.includes('--verify');
   // Opt-in: on an anti-bot challenge (e.g. pracuj.pl Cloudflare wall), retry the
   // URL in a headed browser. Off by default — headed Chromium needs a display, so
@@ -3079,6 +3138,26 @@ async function main() {
   console.log(`\n→ Run /career-ops pipeline to evaluate new offers.`);
   console.log('→ Share results and get help: https://discord.gg/8pRpHETxa4');
 
+  if (jsonMode) {
+    const filtered = totalFilteredTitle + totalFilteredTier + totalFilteredLocation
+      + totalFilteredPostingAge + totalFilteredPostedDate + totalFilteredSalary
+      + totalFilteredContent + totalFilteredCountryEligibility + totalFilteredBlacklist
+      + totalFilteredVisa + totalFilteredCooldown;
+    emitJsonReceipt({
+      version: 'careerops.scan.receipt@1',
+      date,
+      scanned: targets.length,
+      skipped: skippedCount,
+      found: totalFound,
+      filtered,
+      duplicates: totalDupes,
+      added: verifiedOffers.length,
+      added_urls: verifiedOffers.map(offer => offer.url),
+      errors: errors.map(({ company, error }) => ({ company, error })),
+      dry_run: dryRun,
+    }, errors.length > 0 ? 2 : 0);
+  }
+
   // One-time-ever manifesto note: first successful REAL run only. The state
   // file keeps it from ever repeating; --dry-run must leave no trace, and a
   // piped/quiet run is not the moment for it.
@@ -3103,6 +3182,6 @@ if (isMainModule(import.meta.url)) {
   main().catch(err => {
     console.error('Fatal:', err.message);
     writeRunFailureRow('failed');
-    process.exit(1);
+    process.exitCode = 1;
   });
 }

@@ -2071,7 +2071,18 @@ if (generatePdfScript.includes('--allow-reorder')) {
 try {
   const { validateCvSectionOrder } = await import(pathToFileURL(join(ROOT, 'generate-pdf.mjs')).href);
   const cvMarkdown = '# Education\ntext\n# Work Experience\ntext\n# Projects\ntext';
-  const reorderedHtml = '<div class="section-title">Projects</div><div class="section-title">Education</div>';
+  // Education first, then Projects, then Experience last: diverges from cv.md
+  // (which puts Education before Experience before Projects) AND from the
+  // canonical modes/pdf.md tailoring order (#3640, which puts Experience
+  // before Projects before Education) — genuinely scrambled rather than the
+  // one documented reorder pdf.md always produces, which #3640 makes this
+  // guard stop rejecting. `<div class="section-title">Projects</div><div
+  // class="section-title">Education</div>` used to stand in for "reordered",
+  // but Projects-before-Education IS that documented reorder, so it no
+  // longer exercises the "genuinely scrambled" path this test is named for.
+  const reorderedHtml = '<div class="section-title">Education</div>'
+    + '<div class="section-title">Projects</div>'
+    + '<div class="section-title">Experience</div>';
 
   let threw = false;
   try {
@@ -2080,9 +2091,9 @@ try {
     threw = true;
   }
   if (threw) {
-    pass('validateCvSectionOrder throws on a reordered CV by default (--allow-reorder unset)');
+    pass('validateCvSectionOrder throws on a genuinely scrambled CV by default (--allow-reorder unset)');
   } else {
-    fail('validateCvSectionOrder should throw by default when section order diverges from cv.md');
+    fail('validateCvSectionOrder should throw by default when section order diverges from cv.md AND the canonical modes/pdf.md order');
   }
 
   const originalWarn = console.warn;

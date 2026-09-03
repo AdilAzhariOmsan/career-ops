@@ -12274,11 +12274,15 @@ try {
     // to LEGACY_COLMAP (#2274). On a plain 9-column table the fallback happens
     // to line up and hides the bug; with a Location column inserted, the Score
     // cell is read from Location instead — an ES tracker scored "Remote".
+    // `date` is not in REQUIRED_HEADER_FIELDS, so a missing `fecha` alias does
+    // not fail the header — it resolves with no date column and every row comes
+    // back with an empty date (#3705). Assert the Fecha column is actually
+    // resolved, not silently absent.
     const trackerParse = await import(pathToFileURL(join(ROOT, 'tracker-parse.mjs')).href);
     const esHeader = '| # | Fecha | Empresa | Puesto | Location | Score | Status | PDF | Report | Notes |';
     const esMap = trackerParse.detectColumns([esHeader]);
-    if (esMap && esMap.score === 6 && esMap.company === 3 && esMap.role === 4 && esMap.location === 5) {
-      pass('a fully localized header maps through the alias table (#2274)');
+    if (esMap && esMap.date === 2 && esMap.score === 6 && esMap.company === 3 && esMap.role === 4 && esMap.location === 5) {
+      pass('a fully localized header maps through the alias table (#2274, #3705)');
     } else {
       fail(`localized header did not map: ${JSON.stringify(esMap)}`);
     }

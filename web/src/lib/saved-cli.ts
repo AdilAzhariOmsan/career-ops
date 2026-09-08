@@ -45,14 +45,19 @@ export async function resolveCliId(): Promise<string | null> {
   let clis: { id: string; installed?: boolean }[] | undefined;
   try {
     const r = await fetch("/api/clis");
-    const d = (await r.json()) as { clis?: { id: string; installed?: boolean }[] };
-    clis = d.clis;
+    if (r.ok) {
+      const d = (await r.json()) as { clis?: { id: string; installed?: boolean }[] };
+      clis = d.clis;
+    }
   } catch {
-    // /api/clis unreachable — can't check. Trust the saved id rather than
-    // stranding a working setup on a transient fetch failure.
+    // network error — fall through to the not-an-array guard below
+  }
+  if (!Array.isArray(clis)) {
+    // /api/clis unreachable, errored, or malformed — can't check. Trust the
+    // saved id rather than stranding a working setup on a transient failure.
     return saved;
   }
-  if (saved && (clis || []).some((c) => c.id === saved && c.installed)) {
+  if (saved && clis.some((c) => c.id === saved && c.installed)) {
     return saved;
   }
   const sole = pickSoleInstalled(clis);

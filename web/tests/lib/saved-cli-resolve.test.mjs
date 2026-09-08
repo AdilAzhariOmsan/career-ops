@@ -17,7 +17,7 @@ const CONFIG_KEY = "career-ops:config";
 
 // Install fake localStorage + fetch and return the backing store so a test can
 // assert what got persisted.
-function stubEnv({ saved, clis, fetchThrows } = {}) {
+function stubEnv({ saved, clis, fetchThrows, httpError } = {}) {
   const store = new Map();
   if (saved !== undefined) {
     store.set(CONFIG_KEY, JSON.stringify({ mode: "cli", cliId: saved }));
@@ -30,7 +30,8 @@ function stubEnv({ saved, clis, fetchThrows } = {}) {
   globalThis.fetch = async (url) => {
     assert.equal(url, "/api/clis");
     if (fetchThrows) throw new Error("network down");
-    return { json: async () => ({ clis }) };
+    if (httpError) return { ok: false, status: 500, json: async () => ({ error: "boom" }) };
+    return { ok: true, status: 200, json: async () => ({ clis }) };
   };
   return store;
 }
@@ -88,5 +89,10 @@ test("no saved id still picks the sole installed CLI", async () => {
 
 test("an unreachable /api/clis trusts the saved id rather than stranding a working setup", async () => {
   stubEnv({ saved: "claude", fetchThrows: true });
+  assert.equal(await resolveCliId(), "claude");
+});
+
+test("a non-2xx /api/clis response trusts the saved id, not a null 'no CLI' verdict", async () => {
+  stubEnv({ saved: "claude", httpError: true });
   assert.equal(await resolveCliId(), "claude");
 });

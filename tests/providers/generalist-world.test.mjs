@@ -79,6 +79,7 @@ try {
     ['https://www.generalist.world/jobs/ops-lead-acme/', 'https://generalist.world/jobs/ops-lead-acme/'],
     ['  /jobs/padded-slug/  ', 'https://generalist.world/jobs/padded-slug/'],
     ['https://evil.example/jobs/x/', null],
+    ['https://generalist.world.evil.example/jobs/x/', null],
     ['http://generalist.world/jobs/x/', null],
     ['//evil.example/jobs/x/', null],
     ['/jobs/../wp-admin/', null],

@@ -108,6 +108,9 @@ try {
     'Administrative Assistant II (Housing Front Desk)');
   same('a one-sided level with identical tokens still matches',
     'Administrative Assistant', 'Administrative Assistant II');
+  same('a one-sided level with meaningful unique vocabulary on only one side still matches',
+    'Backend Analytics Engineer, Platform II',
+    'Analytics Engineer, Platform Payments');
 } catch (error) {
   fail(`role-matcher level tests could not run: ${error.message}`);
 }

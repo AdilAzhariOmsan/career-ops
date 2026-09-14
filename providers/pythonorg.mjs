@@ -150,8 +150,9 @@ export default {
     if (typeof entry?.careers_url === 'string') {
       try {
         const parsed = new URL(entry.careers_url);
+        if (parsed.protocol !== 'https:') return null;
         const host = parsed.hostname.toLowerCase();
-        if ((host === 'python.org' || host === 'www.python.org') && parsed.pathname.startsWith('/jobs')) {
+        if ((host === 'python.org' || host === 'www.python.org') && /^\/jobs(?:\/|$)/.test(parsed.pathname)) {
           return { url: FEED_URL };
         }
       } catch {

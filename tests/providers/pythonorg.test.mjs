@@ -46,6 +46,18 @@ try {
     fail('pythonorg.detect() should return null for malformed URL');
   }
 
+  if (pythonorg.detect({ name: 'HTTP URL', careers_url: 'http://python.org/jobs/' }) === null) {
+    pass('pythonorg.detect() rejects plain HTTP careers_url');
+  } else {
+    fail('pythonorg.detect() should reject non-HTTPS careers_url');
+  }
+
+  if (pythonorg.detect({ name: 'Different Path', careers_url: 'https://python.org/jobs-archive' }) === null) {
+    pass('pythonorg.detect() rejects non-/jobs path (e.g. /jobs-archive)');
+  } else {
+    fail('pythonorg.detect() should reject /jobs-archive');
+  }
+
   // assertPythonOrgUrl — SSRF protection
   try {
     assertPythonOrgUrl('https://www.python.org/jobs/feed/rss/');

@@ -1,5 +1,6 @@
 // @ts-check
 import { decodeEntities } from './_html-entities.mjs';
+import { htmlToText } from './_html-to-text.mjs';
 
 /** @typedef {import('./_types.js').Provider} Provider */
 /** @typedef {import('./_types.js').Job} Job */
@@ -111,7 +112,7 @@ export function parsePythonOrgFeed(xml, defaultCompany = 'Python.org') {
     let location = '';
     const rawDesc = tagText(item, 'description');
     if (rawDesc) {
-      const firstLine = rawDesc.split('\n')[0].replace(/<[^>]*>/g, '').trim();
+      const firstLine = htmlToText(rawDesc.split('\n')[0]);
       if (firstLine && !firstLine.startsWith('<')) {
         location = firstLine;
       }

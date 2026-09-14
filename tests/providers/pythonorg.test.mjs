@@ -139,6 +139,12 @@ try {
     fail(`jobs[0] location = ${JSON.stringify(jobs[0]?.location)}`);
   }
 
+  if (jobs[0]?.description && !jobs[0].description.includes('<p>') && jobs[0].description.includes('ExampleCo builds')) {
+    pass('parsePythonOrgFeed sanitizes job.description with htmlToText');
+  } else {
+    fail(`jobs[0] description = ${JSON.stringify(jobs[0]?.description)}`);
+  }
+
   if (jobs[0]?.url === 'https://www.python.org/jobs/8133/') {
     pass('parsePythonOrgFeed preserves canonical job URL');
   } else {

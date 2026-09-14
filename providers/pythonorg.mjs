@@ -132,7 +132,10 @@ export function parsePythonOrgFeed(xml, defaultCompany = 'Python.org') {
       job.postedAt = postedAt;
     }
     if (rawDesc) {
-      job.description = rawDesc;
+      const descText = htmlToText(rawDesc);
+      if (descText) {
+        job.description = descText;
+      }
     }
 
     jobs.push(job);

@@ -128,6 +128,21 @@ function discoverTests(dir) {
   return out;
 }
 
+// Strip comment-only lines before grepping a discovered suite's source for a
+// forbidden call — a suite that only MENTIONS a call in a comment (e.g.
+// documenting why it doesn't make it) must not be flagged.
+//
+// Only lines whose first non-whitespace is `//`, `/*` or `*` are removed: a
+// real call can never sit on such a line, so this cannot create a false
+// negative. Trailing comments on a code line are deliberately still scanned —
+// erring toward a loud false positive, never a silent miss.
+function stripCommentLines(src) {
+  return src
+    .split('\n')
+    .filter((line) => !/^\s*(\/\/|\/\*|\*)/.test(line))
+    .join('\n');
+}
+
 async function runDiscovered(filter = null) {
   let files = discoverTests(TESTS_DIR);
   if (filter) {
@@ -146,7 +161,9 @@ async function runDiscovered(filter = null) {
     // process.exit() inside one would terminate test-all mid-run with a forged
     // exit code — every later section (and finish()) would silently never run.
     // Refuse to import such a suite and fail loudly instead (#1916 regression).
-    if (/\bprocess\.exit\s*\(/.test(src)) {
+    // stripCommentLines() first: a suite that only MENTIONS process.exit() in
+    // a comment (e.g. documenting why it doesn't call it) must not be flagged.
+    if (/\bprocess\.exit\s*\(/.test(stripCommentLines(src))) {
       fail(`${rel} calls process.exit() — discovered suites must use pass/fail from tests/helpers.mjs and never exit`);
       continue;
     }
@@ -181,7 +198,10 @@ async function runDiscovered(filter = null) {
     // finish() prints the global summary and exits — inside a discovered suite
     // it forges the verdict line and decapitates every suite sorting after it,
     // sailing past the process.exit() check above (the exit lives in helpers).
-    if (/\bfinish\s*\(\s*\)/.test(src)) {
+    // Same stripCommentLines() treatment as the process.exit() guard above: a
+    // suite that only MENTIONS finish() in a comment (e.g. documenting why it
+    // doesn't call it) must not be flagged.
+    if (/\bfinish\s*\(\s*\)/.test(stripCommentLines(src))) {
       fail(`${f.slice(ROOT.length + 1)} calls finish() — only test-all.mjs may print the global summary; discovered suites use pass/fail and return`);
       continue;
     }

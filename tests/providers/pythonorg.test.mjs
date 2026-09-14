@@ -34,6 +34,18 @@ try {
     fail('pythonorg.detect() should return null for unrelated entry');
   }
 
+  if (pythonorg.detect({ name: 'Malicious Redirect', careers_url: 'https://evil.com/?redirect=https://python.org/jobs' }) === null) {
+    pass('pythonorg.detect() rejects evil.com with python.org/jobs query parameter');
+  } else {
+    fail('pythonorg.detect() should reject evil.com with python.org in query');
+  }
+
+  if (pythonorg.detect({ name: 'Malformed URL', careers_url: 'not-a-valid-url' }) === null) {
+    pass('pythonorg.detect() handles malformed URL gracefully without throwing');
+  } else {
+    fail('pythonorg.detect() should return null for malformed URL');
+  }
+
   // assertPythonOrgUrl — SSRF protection
   try {
     assertPythonOrgUrl('https://www.python.org/jobs/feed/rss/');
@@ -100,8 +112,8 @@ try {
   ].join('\n');
 
   const jobs = parsePythonOrgFeed(sampleXml, 'Python.org');
-  if (jobs.length === 3) pass('parsePythonOrgFeed keeps 3 valid items (drops missing-link and empty-title rows)');
-  else fail(`parsePythonOrgFeed returned ${jobs.length} jobs, expected 3`);
+  if (jobs.length === 2) pass('parsePythonOrgFeed keeps 2 employer-attributed items (drops missing-link, empty-title, and non-employer rows)');
+  else fail(`parsePythonOrgFeed returned ${jobs.length} jobs, expected 2`);
 
   if (jobs[0]?.title === 'Agentic Python Engineer' && jobs[0]?.company === 'ExampleCo') {
     pass('parsePythonOrgFeed splits "{Role}, {Company}" cleanly');
@@ -133,18 +145,20 @@ try {
     fail(`jobs[1] title = ${JSON.stringify(jobs[1]?.title)}`);
   }
 
-  if (jobs[2]?.title === 'Single Title Without Comma' && jobs[2]?.company === 'Python.org') {
-    pass('parsePythonOrgFeed falls back to default company when no comma exists in title');
-  } else {
-    fail(`jobs[2] title/company = ${JSON.stringify({ title: jobs[2]?.title, company: jobs[2]?.company })}`);
-  }
-
   // Robustness checks
   if (parsePythonOrgFeed('').length === 0) pass('empty input → empty result');
   else fail('empty input should yield empty result');
 
   if (parsePythonOrgFeed(null).length === 0) pass('null input → empty result without crashing');
   else fail('null input should yield empty result');
+
+  // Verify non-employer titled item is dropped
+  const noEmployerXml = '<rss><channel><item><title>Engineer Without Company</title><link>https://www.python.org/jobs/9999/</link></item></channel></rss>';
+  if (parsePythonOrgFeed(noEmployerXml).length === 0) {
+    pass('parsePythonOrgFeed drops rows lacking an identifiable employer');
+  } else {
+    fail('parsePythonOrgFeed should drop rows lacking an identifiable employer');
+  }
 
   // fetch() with mock context
   let capturedUrl = null;
@@ -172,10 +186,10 @@ try {
     fail(`pythonorg.fetch() should pass redirect:"error", got: ${JSON.stringify(capturedOpts)}`);
   }
 
-  if (fetched.length === 3) {
+  if (fetched.length === 2) {
     pass('pythonorg.fetch() returns parsed jobs from context');
   } else {
-    fail(`pythonorg.fetch() returned ${fetched.length} jobs, expected 3`);
+    fail(`pythonorg.fetch() returned ${fetched.length} jobs, expected 2`);
   }
 } catch (err) {
   fail(`Unhandled error in pythonorg.test.mjs: ${err.message}\n${err.stack}`);

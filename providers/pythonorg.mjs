@@ -94,19 +94,18 @@ export function parsePythonOrgFeed(xml, defaultCompany = 'Python.org') {
     const rawTitle = tagText(item, 'title');
     if (!rawTitle) continue;
 
-    // Split title and company from format: "{Role}, {Company}"
-    let title = rawTitle;
-    let company = fallback;
-
+    // Split title and company from format: "{Role}, {Company}".
+    // Per Source Indexing Policy, listings must be employer-attributed.
+    // Skip items where an identifiable employer cannot be parsed.
     const lastComma = rawTitle.lastIndexOf(',');
-    if (lastComma > 0) {
-      const candidateRole = rawTitle.slice(0, lastComma).trim();
-      const candidateCompany = rawTitle.slice(lastComma + 1).trim();
-      if (candidateRole && candidateCompany) {
-        title = candidateRole;
-        company = candidateCompany;
-      }
-    }
+    if (lastComma <= 0) continue;
+
+    const candidateRole = rawTitle.slice(0, lastComma).trim();
+    const candidateCompany = rawTitle.slice(lastComma + 1).trim();
+    if (!candidateRole || !candidateCompany) continue;
+
+    const title = candidateRole;
+    const company = candidateCompany;
 
     // Extract location from the first line of <description>
     let location = '';
@@ -147,8 +146,16 @@ export default {
 
   detect(entry) {
     if (entry?.provider === 'pythonorg') return { url: FEED_URL };
-    if (typeof entry?.careers_url === 'string' && /https?:\/\/(www\.)?python\.org\/jobs/i.test(entry.careers_url)) {
-      return { url: FEED_URL };
+    if (typeof entry?.careers_url === 'string') {
+      try {
+        const parsed = new URL(entry.careers_url);
+        const host = parsed.hostname.toLowerCase();
+        if ((host === 'python.org' || host === 'www.python.org') && parsed.pathname.startsWith('/jobs')) {
+          return { url: FEED_URL };
+        }
+      } catch {
+        return null;
+      }
     }
     return null;
   },

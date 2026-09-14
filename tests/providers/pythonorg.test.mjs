@@ -103,9 +103,7 @@ try {
     '<item>',
     '  <title>Backend &amp; ML Developer, Acme AI</title>',
     '  <link>https://www.python.org/jobs/8132/</link>',
-    '  <description>San Francisco, CA, USA',
-    '&lt;p&gt;Looking for senior engineers.&lt;/p&gt;',
-    '  </description>',
+    '  <description>San Francisco, CA, USA&lt;p&gt;Looking for senior engineers.&lt;/p&gt;</description>',
     '</item>',
     '<item>',
     '  <title>Single Title Without Comma</title>',
@@ -161,6 +159,18 @@ try {
     pass('parsePythonOrgFeed decodes XML entities in title');
   } else {
     fail(`jobs[1] title = ${JSON.stringify(jobs[1]?.title)}`);
+  }
+
+  if (jobs[1]?.location === 'San Francisco, CA, USA') {
+    pass('parsePythonOrgFeed extracts location when on single line with HTML body');
+  } else {
+    fail(`jobs[1] location = ${JSON.stringify(jobs[1]?.location)}`);
+  }
+
+  if (jobs[1]?.description?.includes('Looking for senior engineers') && !jobs[1].description.includes('<p>')) {
+    pass('parsePythonOrgFeed sanitizes single-line HTML body into description');
+  } else {
+    fail(`jobs[1] description = ${JSON.stringify(jobs[1]?.description)}`);
   }
 
   // Robustness checks

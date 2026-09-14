@@ -108,13 +108,14 @@ export function parsePythonOrgFeed(xml, defaultCompany = 'Python.org') {
     const title = candidateRole;
     const company = candidateCompany;
 
-    // Extract location from the first line of <description>
+    // Extract location: Python.org RSS items prepend location before the HTML body,
+    // either separated by a newline or immediately preceding the opening HTML tag (< or &lt;).
     let location = '';
     const rawDesc = tagText(item, 'description');
     if (rawDesc) {
-      const firstLine = htmlToText(rawDesc.split('\n')[0]);
-      if (firstLine && !firstLine.startsWith('<')) {
-        location = firstLine;
+      const firstChunk = rawDesc.split(/\r?\n|(?=<[a-z/!])|(?=&lt;[a-z/!])/i)[0];
+      if (!/^\s*(?:<|&lt;)/i.test(firstChunk)) {
+        location = htmlToText(firstChunk);
       }
     }
 

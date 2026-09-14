@@ -96,3 +96,14 @@ test("a non-2xx /api/clis response trusts the saved id, not a null 'no CLI' verd
   stubEnv({ saved: "claude", httpError: true });
   assert.equal(await resolveCliId(), "claude");
 });
+
+test("a malformed /api/clis entry (null in the array) trusts the saved id instead of throwing", async () => {
+  stubEnv({ saved: "claude", clis: [{ id: "claude", installed: true }, null] });
+  assert.equal(await resolveCliId(), "claude");
+});
+
+test("a malformed /api/clis entry (no id) is not picked as the sole install", async () => {
+  const store = stubEnv({ clis: [{ installed: true }] });
+  assert.equal(await resolveCliId(), null);
+  assert.equal(savedCliId(store), undefined, "a malformed entry must not be persisted as the picked CLI");
+});

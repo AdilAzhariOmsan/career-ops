@@ -30,6 +30,17 @@ export function pickSoleInstalled(
   return installed.length === 1 ? installed[0].id : null;
 }
 
+// /api/clis is parsed with a type assertion, not runtime-checked, so a bad
+// entry (null, a string, {id: 123}) would otherwise reach .some()/filter()
+// and either throw or silently pick a CLI with no real id. One malformed
+// entry invalidates the whole response — we don't know what else is wrong
+// with it, so fall through to the same "can't check" path as a network error.
+function isCliEntry(c: unknown): c is { id: string; installed?: boolean } {
+  if (typeof c !== "object" || c === null) return false;
+  const { id, installed } = c as { id?: unknown; installed?: unknown };
+  return typeof id === "string" && id !== "" && (installed === undefined || typeof installed === "boolean");
+}
+
 /**
  * Saved Config cliId if it is still installed, otherwise the only installed CLI
  * (and persist that pick). Returns null when neither resolves — the caller then
@@ -52,7 +63,7 @@ export async function resolveCliId(): Promise<string | null> {
   } catch {
     // network error — fall through to the not-an-array guard below
   }
-  if (!Array.isArray(clis)) {
+  if (!Array.isArray(clis) || !clis.every(isCliEntry)) {
     // /api/clis unreachable, errored, or malformed — can't check. Trust the
     // saved id rather than stranding a working setup on a transient failure.
     return saved;

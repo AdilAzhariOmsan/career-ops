@@ -135,35 +135,45 @@ function discoverTests(dir) {
 // Removed: whole-line `//` comments, and every line of a `/* ... */` block,
 // including unstarred interior lines. Kept: any code that shares a line with a
 // comment, on either side of it, so a real call can never hide behind one:
-// `/* why */ process.exit(1)` and `*gen() { finish() }` are still scanned. The
-// only way to drop code here is to be inside a block comment. Trailing `//`
-// comments on a code line are deliberately still scanned, erring toward a loud
-// false positive, never a silent miss.
+// `/* why */ process.exit(1)` and `*gen() { finish() }` are still scanned.
+// Trailing `//` comments on a code line are deliberately still scanned,
+// erring toward a loud false positive, never a silent miss.
+//
+// Comment markers inside a multi-line template literal are text, not
+// comments, and an interpolation there IS executable — so nothing is stripped
+// while the kept code has an odd number of unescaped backticks (quoted
+// strings and trailing `//` comments excluded from the count). An opener that
+// never closes is not a comment we understand either; the raw source is
+// scanned instead. Both limits fail loud, never silent.
 function stripCommentLines(src) {
   let inBlock = false;
+  let inTemplate = false;
   const kept = [];
   for (const line of src.split('\n')) {
     let rest = line;
-    if (inBlock) {
-      const end = rest.indexOf('*/');
-      if (end === -1) continue;
-      inBlock = false;
-      rest = rest.slice(end + 2);
+    if (!inTemplate) {
+      if (inBlock) {
+        const end = rest.indexOf('*/');
+        if (end === -1) continue;
+        inBlock = false;
+        rest = rest.slice(end + 2);
+      }
+      // A block comment opening at the start of the (remaining) line: drop it,
+      // then look again — `/* a */ /* b */ code` keeps `code`.
+      let open;
+      while ((open = /^\s*\/\*/.exec(rest))) {
+        const end = rest.indexOf('*/', open[0].length);
+        if (end === -1) { inBlock = true; rest = ''; break; }
+        rest = rest.slice(end + 2);
+      }
+      if (/^\s*(\/\/|$)/.test(rest)) continue;
     }
-    // A block comment opening at the start of the (remaining) line: drop it,
-    // then look again — `/* a */ /* b */ code` keeps `code`.
-    let open;
-    while ((open = /^\s*\/\*/.exec(rest))) {
-      const end = rest.indexOf('*/', open[0].length);
-      if (end === -1) { inBlock = true; rest = ''; break; }
-      rest = rest.slice(end + 2);
-    }
-    if (/^\s*(\/\/|$)/.test(rest)) continue;
     kept.push(rest);
+    const code = rest
+      .replace(/'(?:\\.|[^'\\])*'|"(?:\\.|[^"\\])*"/g, '')
+      .replace(/\/\/.*$/, '');
+    if (((code.match(/(?<!\\)`/g) ?? []).length) % 2 === 1) inTemplate = !inTemplate;
   }
-  // An opener that never closes is not a comment we understand (a template
-  // literal holding a code fixture, say). Rather than drop the rest of the
-  // file on that guess, scan the raw source: loud, never silent.
   if (inBlock) return src;
   return kept.join('\n');
 }

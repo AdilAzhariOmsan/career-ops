@@ -965,6 +965,9 @@ process_offer() {
 
   # Non-claude CLIs lack --append-system-prompt-file, so concatenate the
   # resolved system prompt and the per-job prompt into a single argument.
+  # model_args is expanded with the ${arr[@]+"${arr[@]}"} idiom below: under
+  # `set -u`, bash 3.2 (macOS /bin/bash) treats an empty array expansion as an
+  # unbound variable and would abort every worker launched without --model.
   local full_prompt=""
   local -a model_args=()
   if [[ "$CLI" != "claude" ]]; then
@@ -986,9 +989,9 @@ process_offer() {
         ;;
       opencode)
         if command -v opencode &>/dev/null; then
-          opencode run "${model_args[@]}" "$full_prompt" > "$log_file" 2>&1 || exit_code=$?
+          opencode run ${model_args[@]+"${model_args[@]}"} "$full_prompt" > "$log_file" 2>&1 || exit_code=$?
         else
-          ollama launch opencode "${model_args[@]}" -y -- run "$full_prompt" > "$log_file" 2>&1 || exit_code=$?
+          ollama launch opencode ${model_args[@]+"${model_args[@]}"} -y -- run "$full_prompt" > "$log_file" 2>&1 || exit_code=$?
         fi
         ;;
       gemini)

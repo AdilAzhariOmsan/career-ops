@@ -17,7 +17,6 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { registerHooks } from "node:module";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -25,7 +24,17 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 const SRC = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "src");
 
-registerHooks({
+// engines allows Node >=22, but importing a .ts file needs type stripping
+// (default from 22.18 / 23.6) and module.registerHooks (22.15 / 23.5). CI runs
+// 24; on an older local Node the three cases skip rather than fail — which is
+// why registerHooks is looked up at runtime rather than imported by name: a
+// static named import of an export that does not exist fails the whole file
+// before any skip can run.
+const { registerHooks } = await import("node:module");
+const canImportTs = Boolean(process.features?.typescript) && typeof registerHooks === "function";
+const skip = !canImportTs && "this Node cannot import planner.ts (no type stripping or module.registerHooks)";
+
+if (canImportTs) registerHooks({
   resolve(specifier, context, nextResolve) {
     if (specifier.startsWith("@/")) {
       return nextResolve(pathToFileURL(path.join(SRC, specifier.slice(2))).href, context);
@@ -40,11 +49,6 @@ registerHooks({
   },
 });
 
-// engines allows Node >=22, but importing a .ts file needs type stripping
-// (default from 22.18 / 23.6) and registerHooks (22.15 / 23.5). CI runs 24;
-// on an older local Node the three cases skip rather than fail on the import.
-const canImportTs = Boolean(process.features?.typescript) && typeof registerHooks === "function";
-const skip = !canImportTs && "this Node cannot import planner.ts (no type stripping)";
 const { runPlanner } = canImportTs ? await import("../../src/lib/apply/planner.ts") : { runPlanner: null };
 
 /** A runPlanner call with everything but the runtime fixed; returns the run and the log lines. */

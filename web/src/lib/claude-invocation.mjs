@@ -236,11 +236,17 @@ export function verifyClaudeArgs(args, capabilities) {
   // would certify it as fenced. --strict-mcp-config with no --mcp-config loads
   // ZERO servers, which is what makes the tool lists a complete description of
   // what the agent can reach (the reasoning claudeCliArgs already applies to pdf).
-  if (!capabilities.writes && !args.includes("--strict-mcp-config")) {
+  // The same reasoning covers an EXPLICIT --mcp-config: --strict-mcp-config only
+  // stops the user's default servers from loading, the ones named beside it on
+  // the command line still do — so the pair would certify as fenced an argv
+  // that loads a server. No builder emits either form; this is the guard, not
+  // the builder.
+  const loadsMcpConfig = args.some((a) => a === "--mcp-config" || a.startsWith("--mcp-config="));
+  if (!capabilities.writes && (!args.includes("--strict-mcp-config") || loadsMcpConfig)) {
     throw new Error(
-      "cli-fencing: claude argv for a non-writing worker omits --strict-mcp-config, so a " +
-        "user-configured MCP server could supply a write tool the capability record forbids. " +
-        "Native tool flags alone cannot describe what this agent can reach.",
+      "cli-fencing: claude argv for a non-writing worker must pass --strict-mcp-config and no " +
+        "--mcp-config, otherwise a user-configured MCP server could supply a write tool the " +
+        "capability record forbids. Native tool flags alone cannot describe what this agent can reach.",
     );
   }
 

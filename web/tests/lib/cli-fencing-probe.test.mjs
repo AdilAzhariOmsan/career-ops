@@ -163,6 +163,40 @@ test("a required value is recognised inside codex's possible-values list", () =>
   assert.equal(helpSatisfiesFencing(help, ROUTE_EXEC_FLAGS), true);
 });
 
+test("an option described on the same line as its flags is still a declaration", () => {
+  // Given clap's other layout: when flags and description fit the terminal
+  // width it prints them on ONE line (`-s, --sandbox <SANDBOX_MODE>  Select the
+  // sandbox policy to use`), and may append the possible values to that line.
+  // codex-cli 0.154.0 happens to wrap every option, but the layout is decided per
+  // build and per help text, not by us.
+  const inline = (flag) => `${flag} <VALUE>  Description of ${flag} that sits on the same line`;
+  const help = completeHelp({
+    globalHelp: CODEX_REQUIRED_GLOBAL_FLAGS.map(inline).join("\n"),
+    execHelp: [
+      "-c, --config <key=value>  Override a configuration value that would otherwise be loaded",
+      "-s, --sandbox <SANDBOX_MODE>  Select the sandbox policy to use [possible values: read-only, workspace-write, danger-full-access]",
+      ...ROUTE_EXEC_FLAGS.map(inline),
+    ].join("\n"),
+  });
+
+  // When it is evaluated
+  // Then every flag is declared and the sandbox modes still belong to --sandbox,
+  // so a binary whose help fits on one line is not rejected as unsupported.
+  assert.equal(helpSatisfiesFencing(help, ROUTE_EXEC_FLAGS), true);
+
+  // And the inline text is a description, not evidence: a sandbox mode named in
+  // another option's description proves nothing about --sandbox.
+  const misattributed = completeHelp({
+    execHelp: [
+      "-c, --config <key=value>  Override a configuration value",
+      "--sandbox <SANDBOX_MODE>  Select the sandbox policy",
+      "--color <WHEN>  Colour output; unrelated to read-only or workspace-write",
+      ...ROUTE_EXEC_FLAGS.map(inline),
+    ].join("\n"),
+  });
+  assert.equal(helpSatisfiesFencing(misattributed, ROUTE_EXEC_FLAGS), false);
+});
+
 test("required tokens mentioned only in prose do not satisfy the contract", () => {
   const globalHelp = CODEX_REQUIRED_GLOBAL_FLAGS.map((flag) => `The ${flag} option was removed.`).join("\n");
   const execHelp = [...CODEX_REQUIRED_EXEC_FLAGS, ...ROUTE_EXEC_FLAGS]

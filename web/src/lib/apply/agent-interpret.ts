@@ -124,23 +124,34 @@ function runPlanner(binPath: string, cliId: string, argsFor: (p: string) => stri
 
 type Interpreted = { n: number; skip?: boolean; label?: string; type?: string; options?: string[]; required?: boolean };
 
-/** The agentic interpreter: capture the live form, let the LLM read+classify it,
- *  re-tag the chosen controls with data-co-field, and return clean ApplyField[].
- *  Returns [] if the CLI is missing or interpretation fails (caller falls back). */
-export async function agentInterpretForm(frame: Frame, cliId: string, title: string): Promise<ApplyField[]> {
-  const resolved = resolveCli(cliId);
-  if (!resolved) return [];
-  const cands = await captureCandidates(frame).catch(() => [] as Cand[]);
-  if (!cands.length) return [];
+/** What the agentic interpreter did. `fields` is the interpretation; `spawned`
+ *  says whether the user's CLI was actually launched over the form. The two are
+ *  independent — a launched agent can return nothing usable, and a missing CLI
+ *  or an empty form never launches one — and the fencing notice the callers
+ *  surface is about the launch, not about the result (#2507). */
+export type AgentInterpretation = { fields: ApplyField[]; spawned: boolean };
 
+/** The agentic interpreter: capture the live form, let the LLM read+classify it,
+ *  re-tag the chosen controls with data-co-field, and return clean ApplyField[]
+ *  together with whether the CLI ran. `fields` is [] if the CLI is missing, the
+ *  form has no controls, or interpretation fails (caller falls back). */
+export async function interpretFormWithAgent(frame: Frame, cliId: string, title: string): Promise<AgentInterpretation> {
+  const resolved = resolveCli(cliId);
+  if (!resolved) return { fields: [], spawned: false };
+  const cands = await captureCandidates(frame).catch(() => [] as Cand[]);
+  if (!cands.length) return { fields: [], spawned: false };
+
+  // From here on the CLI has been launched: every early return below still
+  // reports spawned: true, so a caller can warn about an unfenced runtime even
+  // when the interpretation came back empty.
   const out = await runPlanner(resolved.binPath, cliId, resolved.spec.args, buildPrompt(title, cands));
   const m = out.match(/\[[\s\S]*\]/);
-  if (!m) return [];
+  if (!m) return { fields: [], spawned: true };
   let parsed: Interpreted[];
   try {
     parsed = JSON.parse(m[0]);
   } catch {
-    return [];
+    return { fields: [], spawned: true };
   }
 
   const byN = new Map(cands.map((c) => [c.n, c]));
@@ -156,7 +167,7 @@ export async function agentInterpretForm(frame: Frame, cliId: string, title: str
       fields.push({ id: fid, type, label: (p.label || cand.ctx || "").slice(0, 160), required: !!p.required || cand.req, options: options.length ? options : undefined, combobox: type === "select" && cand.tag !== "select" });
       tagMap.push({ candN: p.n, fid, type, options });
     });
-  if (!fields.length) return [];
+  if (!fields.length) return { fields: [], spawned: true };
 
   // Re-tag the live elements: data-co-field on the chosen control (+ per-option
   // data-co-option for radios) so fillSession can locate them deterministically.
@@ -177,5 +188,11 @@ export async function agentInterpretForm(frame: Frame, cliId: string, title: str
     }, tagMap)
     .catch(() => {});
 
-  return fields;
+  return { fields, spawned: true };
+}
+
+/** Fields only — the original contract, for callers that do not surface the
+ *  fencing notice themselves. */
+export async function agentInterpretForm(frame: Frame, cliId: string, title: string): Promise<ApplyField[]> {
+  return (await interpretFormWithAgent(frame, cliId, title)).fields;
 }

@@ -96,7 +96,10 @@ test("toolScopeFor: research is read-only too, but is NOT pdf's scope", () => {
 
   // And the same through the shipped argv, since that is what actually reaches
   // the CLI — a scope is only as good as the command line built from it.
-  assert.ok(claudeCliArgs({ kind: "research", prompt: "x" }).join(" ").includes("WebFetch"));
+  assert.ok(
+    toolNames(argValue(claudeCliArgs({ kind: "research", prompt: "x" }), "--allowedTools")).includes("WebFetch"),
+    "research must be GRANTED WebFetch in the shipped argv — the flattened argv also contains it when it is denied",
+  );
   assert.ok(!toolNames(argValue(claudeCliArgs({ kind: "pdf", prompt: "x" }), "--allowedTools")).includes("WebFetch"));
 });
 

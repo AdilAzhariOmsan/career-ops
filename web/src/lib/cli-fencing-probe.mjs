@@ -136,8 +136,15 @@ function readCliHelp(binPath, args) {
 }
 
 const OPTION_TOKEN = "-{1,2}[A-Za-z0-9?][A-Za-z0-9?-]*";
+// clap prints an option's description on the SAME line as its flags when both
+// fit the terminal width (`-s, --sandbox <SANDBOX_MODE>  Select the sandbox
+// policy`), and on the next line otherwise. A declaration is recognised either
+// way: an inline description is anything after two or more spaces, and a
+// trailing `[possible values: …]` still belongs to the option, not the prose.
+// One space is NOT a description (`--sandbox was removed in this build` stays
+// prose), which is the boundary the sandbox-evidence test pins.
 const OPTION_DECLARATION = new RegExp(
-  `^(${OPTION_TOKEN})(?:,\\s*(${OPTION_TOKEN}))?(?:\\s+<[^>]+>(?:\\.\\.\\.)?)?(?:\\s+\\[possible values:\\s*([^\\]]+)\\])?\\s*$`,
+  `^(${OPTION_TOKEN})(?:,\\s*(${OPTION_TOKEN}))?(?:\\s+<[^>]+>(?:\\.\\.\\.)?)?(?:\\s{2,}(?!\\[possible values:)\\S.*?)?(?:\\s*\\[possible values:\\s*([^\\]]+)\\])?\\s*$`,
   "i",
 );
 const POSSIBLE_VALUES = /^\[possible values:\s*([^\]]+)\]\s*$/i;

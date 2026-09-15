@@ -5,6 +5,7 @@ import { careerOpsRoot } from "@/lib/career-ops";
 import { dropNewTabs } from "./diagnose";
 import type { DriveStep } from "./issue";
 import { CAPS } from "../worker-capabilities.mjs";
+import { scopeFrom } from "../claude-invocation.mjs";
 
 export type { DriveStep };
 
@@ -55,10 +56,19 @@ async function snapshot(frame: Frame): Promise<{ text: string; n: number }> {
   });
 }
 
+// The narrowest scope in the app. scopeFrom("") grants nothing, so every
+// write-capable and network tool is denied BY DERIVATION; Read, Glob and Grep are
+// denied on top so the planner reasons over the snapshot it was handed and
+// nothing else. Derived rather than hand-listed for the reason agent-interpret.ts
+// gives (#2185): a tool added to WRITE_CAPABLE_TOOLS or NETWORK_TOOLS must not
+// leave this argv silently permissive — and verifyClaudeArgs would refuse the
+// spawn the moment the hand-written copy fell behind.
+const PLANNER_DENIED = [scopeFrom("").disallowed, "Read", "Glob", "Grep"].join(",");
+
 /** One planner turn (Claude-first: --resume keeps the loop's context cheaply). */
 function plannerTurn(binPath: string, prompt: string, resumeId: string | null): Promise<{ out: string; sessionId: string | null }> {
   const base = resumeId ? ["-p", "--resume", resumeId, prompt] : ["-p", prompt];
-  const args = [...base, "--output-format", "json", "--strict-mcp-config", "--disallowedTools", "Bash,Read,Write,Edit,MultiEdit,NotebookEdit,Task,WebFetch,WebSearch,Glob,Grep"];
+  const args = [...base, "--output-format", "json", "--strict-mcp-config", "--disallowedTools", PLANNER_DENIED];
   return new Promise((resolve) => {
     // Claude-only by construction — driveSession returns before the loop unless
     // cliId is "claude", and this argv is Claude's own (--resume, --output-format

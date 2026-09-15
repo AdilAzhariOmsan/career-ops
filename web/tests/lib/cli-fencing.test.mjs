@@ -547,6 +547,24 @@ test("a non-writing claude argv without --strict-mcp-config is refused", () => {
   assert.doesNotThrow(() => fenceArgs({ cliId: "claude", args: writeArgs, capabilities: CAPS.workspaceWrite }));
 });
 
+test("a non-writing claude argv that names an MCP config is refused even with --strict-mcp-config", () => {
+  // Given --strict-mcp-config only stops the user's DEFAULT servers from loading;
+  // a server named on the command line beside it still loads, and could expose a
+  // write tool the native deny list cannot name. Both spellings claude accepts.
+  for (const extra of [["--mcp-config", "servers.json"], ["--mcp-config=servers.json"]]) {
+    assert.throws(
+      () => fenceArgs({ cliId: "claude", args: [...claudeArgv(), ...extra], capabilities: CAPS.localReadOnly }),
+      /--mcp-config/,
+      `${extra.join(" ")} must be refused for a non-writing worker`,
+    );
+  }
+
+  // And a writing worker keeps its configured servers, as with --strict-mcp-config.
+  const writeScope = scopeFrom("Read,WebFetch,WebSearch,Write,Edit,Bash,Glob,Grep");
+  const writeArgs = ["-p", "PROMPT", "--mcp-config", "servers.json", "--allowedTools", writeScope.allowed, "--disallowedTools", writeScope.disallowed];
+  assert.doesNotThrow(() => fenceArgs({ cliId: "claude", args: writeArgs, capabilities: CAPS.workspaceWrite }));
+});
+
 test("a prototype-inherited cliId is not mistaken for a fencer", () => {
   // Given `FENCERS[cliId]` also resolves inherited Object.prototype members, so
   // "toString" or "constructor" yields a truthy function that would then be CALLED

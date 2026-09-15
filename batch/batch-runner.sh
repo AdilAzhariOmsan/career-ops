@@ -975,8 +975,8 @@ process_offer() {
     [[ -n "$MODEL" ]] && model_args=(--model "$MODEL")
   fi
 
-  # The retry loop's rate-limit/session detection only matches claude logs, so
-  # non-claude CLIs naturally run a single attempt and fall through to break.
+  # Non-claude CLIs run a single attempt (explicit break after dispatch); the
+  # rate-limit/session retry loop only applies to claude.
   local exit_code=0
   local terminal_failure_recorded=false
   local shim_retries=0
@@ -995,12 +995,19 @@ process_offer() {
         fi
         ;;
       gemini)
-        gemini -p "$full_prompt" > "$log_file" 2>&1 || exit_code=$?
+        gemini ${model_args[@]+"${model_args[@]}"} -p "$full_prompt" > "$log_file" 2>&1 || exit_code=$?
         ;;
       qwen)
-        qwen -p "$full_prompt" > "$log_file" 2>&1 || exit_code=$?
+        qwen ${model_args[@]+"${model_args[@]}"} -p "$full_prompt" > "$log_file" 2>&1 || exit_code=$?
         ;;
     esac
+
+    # Non-claude CLIs run a single attempt: the session-limit and rate-limit
+    # detection below greps generic phrases (429, quota, session limit) that
+    # another CLI's log could match by coincidence and pause or retry the batch.
+    if [[ "$CLI" != "claude" ]]; then
+      break
+    fi
 
     if [[ $exit_code -eq 0 ]]; then
       break

@@ -18,7 +18,7 @@
 import { pass, fail, rmSync, getBash } from './helpers.mjs';
 import { execFileSync } from 'node:child_process';
 import { readFileSync, writeFileSync, mkdtempSync, mkdirSync, chmodSync, existsSync } from 'node:fs';
-import { join, dirname } from 'node:path';
+import { join, dirname, delimiter } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 
@@ -66,16 +66,27 @@ if (dispatchBlock) {
     // Stub opencode: print its argv one per line so the test can assert the
     // exact command the runner would launch.
     const stub = join(bin, 'opencode');
-    writeFileSync(stub, '#!/bin/sh\nprintf \'ARG:%s\\n\' "$@"\n');
-    chmodSync(stub, 0o755);
+    writeFileSync(stub, '#!/usr/bin/env bash\nprintf \'ARG:%s\\n\' "$@"\n');
+    if (process.platform === 'win32') {
+      // fs.chmodSync is a no-op on Windows; set the bit through Git Bash.
+      try { execFileSync(getBash(), ['-c', 'chmod +x bin/opencode'], { cwd: work }); } catch {}
+    } else {
+      chmodSync(stub, 0o755);
+    }
 
     const systemPrompt = join(work, 'system-prompt.md');
     writeFileSync(systemPrompt, 'SYSTEM PROMPT');
     const logFile = join(work, 'worker.log');
 
+    // The stub goes on PATH through the child environment, not the script
+    // text: Git Bash converts an inherited Windows PATH to POSIX form, but a
+    // `C:\...` entry spliced into the script splits on the drive-letter colon,
+    // so `command -v opencode` missed the stub and the runner fell back to
+    // `ollama` (exit 127 on windows-latest at 2c6a1d5). Same as test-all §13.
+    const env = { ...process.env, PATH: `${bin}${delimiter}${process.env.PATH}` };
+
     const buildScript = (model) => [
       'set -euo pipefail',
-      `PATH=${JSON.stringify(bin)}:"$PATH"`,
       'CLI=opencode',
       `MODEL=${JSON.stringify(model)}`,
       'prompt="JOB PROMPT"',
@@ -103,7 +114,7 @@ if (dispatchBlock) {
     let out1 = '';
     let err1 = null;
     try {
-      out1 = execFileSync(bash, [script1], { encoding: 'utf-8', timeout: 30000, stdio: ['ignore', 'pipe', 'pipe'] });
+      out1 = execFileSync(bash, [script1], { encoding: 'utf-8', timeout: 30000, env, stdio: ['ignore', 'pipe', 'pipe'] });
     } catch (e) {
       err1 = e;
     }
@@ -128,7 +139,7 @@ if (dispatchBlock) {
     // Case 2: --cli opencode --model qwen2.5:32b forwards the model
     const script2 = join(work, 'with-model.sh');
     writeFileSync(script2, buildScript('qwen2.5:32b'));
-    const out2 = execFileSync(bash, [script2], { encoding: 'utf-8', timeout: 30000 });
+    const out2 = execFileSync(bash, [script2], { encoding: 'utf-8', timeout: 30000, env });
     const args2 = (existsSync(logFile) ? readFileSync(logFile, 'utf-8') : '').split('\n').filter((l) => l.startsWith('ARG:')).map((l) => l.slice(4));
     if (/EXIT:0/.test(out2) && args2[0] === 'run' && args2[1] === '--model' && args2[2] === 'qwen2.5:32b') {
       pass('--model is forwarded to native `opencode run --model <name>`');

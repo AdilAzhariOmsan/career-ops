@@ -33,7 +33,17 @@ async function fetchInContext(url, { timeoutMs = DEFAULT_TIMEOUT_MS, headers = {
   try {
     const res = await fetch(url, {
       method,
-      headers: { 'user-agent': DEFAULT_USER_AGENT, ...headers },
+      // accept-encoding is pinned to the codecs undici decodes correctly.
+      // Left unset, Node negotiates zstd, and amazon.jobs' zstd response comes
+      // back TRUNCATED AT 1024 BYTES with a 200 status — so the failure surfaces
+      // as an unrelated-looking "Unterminated string in JSON at position 1024"
+      // rather than a transport error. curl on the same URL returns the full
+      // ~900KB. Callers can still override via `headers`.
+      headers: {
+        'user-agent': DEFAULT_USER_AGENT,
+        'accept-encoding': 'gzip, deflate, br',
+        ...headers,
+      },
       body,
       redirect,
       signal: controller.signal,

@@ -128,19 +128,44 @@ function discoverTests(dir) {
   return out;
 }
 
-// Strip comment-only lines before grepping a discovered suite's source for a
-// forbidden call — a suite that only MENTIONS a call in a comment (e.g.
+// Strip comment lines before grepping a discovered suite's source for a
+// forbidden call: a suite that only MENTIONS a call in a comment (e.g.
 // documenting why it doesn't make it) must not be flagged.
 //
-// Only lines whose first non-whitespace is `//`, `/*` or `*` are removed: a
-// real call can never sit on such a line, so this cannot create a false
-// negative. Trailing comments on a code line are deliberately still scanned —
-// erring toward a loud false positive, never a silent miss.
+// Removed: whole-line `//` comments, and every line of a `/* ... */` block,
+// including unstarred interior lines. Kept: any code that shares a line with a
+// comment, on either side of it, so a real call can never hide behind one:
+// `/* why */ process.exit(1)` and `*gen() { finish() }` are still scanned. The
+// only way to drop code here is to be inside a block comment. Trailing `//`
+// comments on a code line are deliberately still scanned, erring toward a loud
+// false positive, never a silent miss.
 function stripCommentLines(src) {
-  return src
-    .split('\n')
-    .filter((line) => !/^\s*(\/\/|\/\*|\*)/.test(line))
-    .join('\n');
+  let inBlock = false;
+  const kept = [];
+  for (const line of src.split('\n')) {
+    let rest = line;
+    if (inBlock) {
+      const end = rest.indexOf('*/');
+      if (end === -1) continue;
+      inBlock = false;
+      rest = rest.slice(end + 2);
+    }
+    // A block comment opening at the start of the (remaining) line: drop it,
+    // then look again — `/* a */ /* b */ code` keeps `code`.
+    let open;
+    while ((open = /^\s*\/\*/.exec(rest))) {
+      const end = rest.indexOf('*/', open[0].length);
+      if (end === -1) { inBlock = true; rest = ''; break; }
+      rest = rest.slice(end + 2);
+    }
+    if (/^\s*(\/\/|$)/.test(rest)) continue;
+    kept.push(rest);
+  }
+  // An opener that never closes is not a comment we understand (a template
+  // literal holding a code fixture, say). Rather than drop the rest of the
+  // file on that guess, scan the raw source: loud, never silent.
+  if (inBlock) return src;
+  return kept.join('\n');
 }
 
 async function runDiscovered(filter = null) {
@@ -16160,6 +16185,7 @@ try {
     // than skip, because a skip is how this freeze would silently stop guarding.
     const required = {
       'claude-invocation.mjs': join(webLib, 'claude-invocation.mjs'),
+      'worker-capabilities.mjs': join(webLib, 'worker-capabilities.mjs'),
       'cv-envelope.mjs': join(webLib, 'cv-envelope.mjs'),
       'run-prompts.mjs': join(webLib, 'run-prompts.mjs'),
       'api/run/route.ts': runRoutePath,
@@ -16169,9 +16195,14 @@ try {
       fail(`web/ exists but ${missing.join(', ')} is missing — the #2185 write-scope freeze cannot verify (was it moved?)`);
     } else {
       let invocation;
+      let capabilities;
       let prompts;
       try {
         invocation = await import(pathToFileURL(required['claude-invocation.mjs']).href);
+        // KNOWN_KINDS moved to worker-capabilities.mjs, which owns the policy both
+        // CLIs read: the set of run kinds is a fact about the route's workers, not
+        // about Claude (#2507).
+        capabilities = await import(pathToFileURL(required['worker-capabilities.mjs']).href);
         prompts = await import(pathToFileURL(required['run-prompts.mjs']).href);
         // Imported for its side effect of resolving: run-prompts pulls cv-envelope
         // for CV_ENVELOPE_INSTRUCTION, so a break there would surface here anyway,
@@ -16278,7 +16309,7 @@ try {
         // can still be auto-approved by --permission-mode acceptEdits, and a
         // pdf-only probe let exactly that ship for the persisting kinds.
         const unmentioned = [];
-        for (const kind of invocation.KNOWN_KINDS) {
+        for (const kind of capabilities.KNOWN_KINDS) {
           const scope = invocation.toolScopeFor(kind);
           const named = [...toolNames(scope.allowed), ...toolNames(scope.disallowed)];
           for (const tool of WRITE_CAPABLE_TOOLS) {
@@ -16356,8 +16387,35 @@ try {
           .split('\n')
           .filter((l) => !/^\s*import\b/.test(l))
           .join('\n');
-        const spelledFlags = ['--allowedTools', '--disallowedTools', '--permission-mode']
-          .filter((flag) => routeCode.includes(flag));
+        // The sandbox flags join the tool flags here (#2507). Permission is no
+        // longer Claude-only: Codex is fenced with `-c sandbox_mode=…` applied at
+        // the spawn boundary, and the same reasoning applies — a route that spells
+        // its own sandbox policy makes the value assertions above describe an argv
+        // that is not the one shipped. Comments are stripped before this runs, so
+        // the route's prose about sandboxes is exempt; only real strings count.
+        //
+        // Anchored patterns, not bare substrings: `read-only` and `workspace-write`
+        // as plain `includes()` would fire on any prose or identifier containing
+        // them, and a bare `-s` cannot be matched that way at all because
+        // `--strict-mcp-config` contains it. Each pattern below names the flag form
+        // it is actually looking for.
+        const SANDBOX_PATTERNS = [
+          [/--allowedTools/, '--allowedTools'],
+          [/--disallowedTools/, '--disallowedTools'],
+          [/--permission-mode/, '--permission-mode'],
+          [/--sandbox\b/, '--sandbox'],
+          [/\bsandbox_mode\s*=/, 'sandbox_mode='],
+          [/\bsandbox_workspace_write\./, 'sandbox_workspace_write.*'],
+          // Approval policy and web access are permission too, and are what a
+          // route reaching for its own Codex invocation spells first — #2361 did
+          // exactly that, inline, in another route.
+          [/--ask-for-approval/, '--ask-for-approval'],
+          [/--search\b/, '--search'],
+          // `-s` as a standalone argv token: quoted on its own, as an argv element
+          // would be. Does not match the `-s` inside `--strict-mcp-config`.
+          [/(['"`])-s\1/, '-s'],
+        ];
+        const spelledFlags = SANDBOX_PATTERNS.filter(([re]) => re.test(routeCode)).map(([, name]) => name);
         const argvCallSites = (routeCode.match(/claudeCliArgs\s*\(/g) ?? []).length;
         // `kind` must reach claudeCliArgs as a SHORTHAND property. Property order
         // and line wrapping are free, but `{ kind: <anything> }` is refused:

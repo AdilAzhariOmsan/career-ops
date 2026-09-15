@@ -59,7 +59,7 @@ function tagText(block, tag) {
 }
 
 // Keep only absolute HTTPS links hosted on the trusted domain.
-function cleanUrl(value) {
+export function cleanUrl(value) {
   if (!value) return '';
   try {
     const parsed = new URL(value.trim());

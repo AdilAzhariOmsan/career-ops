@@ -85,6 +85,26 @@ try {
   if (rejectedHost) pass('assertPythonOrgUrl rejects untrusted hostnames');
   else fail('assertPythonOrgUrl should reject untrusted hostnames');
 
+  // Anchor boundary: prefix-spoof (evilpython.org must be rejected)
+  let rejectedPrefixSpoof = false;
+  try {
+    assertPythonOrgUrl('https://evilpython.org/jobs/feed/rss/');
+  } catch {
+    rejectedPrefixSpoof = true;
+  }
+  if (rejectedPrefixSpoof) pass('assertPythonOrgUrl rejects prefix-spoof host (evilpython.org)');
+  else fail('assertPythonOrgUrl should reject evilpython.org (prefix-spoof)');
+
+  // Anchor boundary: suffix-spoof (python.org.evil.com must be rejected)
+  let rejectedSuffixSpoof = false;
+  try {
+    assertPythonOrgUrl('https://python.org.evil.com/jobs/feed/rss/');
+  } catch {
+    rejectedSuffixSpoof = true;
+  }
+  if (rejectedSuffixSpoof) pass('assertPythonOrgUrl rejects suffix-spoof host (python.org.evil.com)');
+  else fail('assertPythonOrgUrl should reject python.org.evil.com (suffix-spoof)');
+
   // parsePythonOrgFeed — sample XML fixture
   const sampleXml = [
     '<?xml version="1.0" encoding="utf-8"?>',
@@ -186,6 +206,27 @@ try {
     pass('parsePythonOrgFeed drops rows lacking an identifiable employer');
   } else {
     fail('parsePythonOrgFeed should drop rows lacking an identifiable employer');
+  }
+
+  // cleanUrl() anchor boundary — same guard as assertPythonOrgUrl, pin against future de-anchoring
+  const { cleanUrl: _cleanUrl } = pythonorgModule;
+  if (_cleanUrl) {
+    if (_cleanUrl('https://www.python.org/jobs/8000/') === 'https://www.python.org/jobs/8000/' &&
+        _cleanUrl('https://python.org/jobs/8000/') === 'https://python.org/jobs/8000/') {
+      pass('cleanUrl() accepts valid python.org HTTPS URLs');
+    } else {
+      fail('cleanUrl() should accept valid python.org HTTPS URLs');
+    }
+    if (_cleanUrl('https://evilpython.org/jobs/8000/') === '') {
+      pass('cleanUrl() rejects prefix-spoof host (evilpython.org)');
+    } else {
+      fail('cleanUrl() should reject evilpython.org (prefix-spoof)');
+    }
+    if (_cleanUrl('https://python.org.evil.com/jobs/8000/') === '') {
+      pass('cleanUrl() rejects suffix-spoof host (python.org.evil.com)');
+    } else {
+      fail('cleanUrl() should reject python.org.evil.com (suffix-spoof)');
+    }
   }
 
   // fetch() with mock context

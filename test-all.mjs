@@ -2017,7 +2017,7 @@ for (const pattern of leakPatterns) {
     for (const line of result.split('\n')) {
       const file = line.split(':')[0];
       if (allowedFiles.some(a => file === a || file.endsWith('/' + a))) continue;
-      if (file.includes('dashboard/go.mod')) continue;
+      if (file === 'dashboard/go.mod' || file.endsWith('/dashboard/go.mod')) continue;
       warn(`Possible personal data in ${file}: "${pattern}"`);
       leakFound = true;
     }

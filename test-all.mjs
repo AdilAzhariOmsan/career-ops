@@ -1991,6 +1991,10 @@ const allowedFiles = [
   // Dashboard credit string
   'dashboard/internal/ui/screens/pipeline.go',
   'dashboard/internal/ui/screens/progress.go',
+  'dashboard/internal/ui/screens/stats.go',
+  // Hired Wall: credits the maintainer and documents the allowed link domains
+  'funding.json', '.codex-plugin/plugin.json', 'HIRED.md',
+  'hired-wall-build.mjs', 'tests/hired-wall.test.mjs', 'tests/project-identity.test.mjs',
 ];
 
 // Build pathspec for git grep — only scan tracked files matching these

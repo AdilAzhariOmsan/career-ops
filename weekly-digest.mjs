@@ -34,22 +34,28 @@
  * Default range: the current ISO week (Monday–Sunday), matching the
  * `isoWeek` convention already used by `stats.mjs`'s scan-run trends.
  *
- * Issue #2129 — github.com/santifer/career-ops
+ * Issue #2129 — github.com/career-ops-hq/career-ops
  */
 
 import { readFileSync, existsSync, readdirSync, mkdtempSync, writeFileSync, rmSync } from 'fs';
 import { join, dirname } from 'path';
-import { fileURLToPath, pathToFileURL } from 'url';
+import { fileURLToPath } from 'url';
 import * as yaml from 'js-yaml';
 
 // Only validateFlags: this module keeps its own flagValue (see below), so
 // importing the shared one too would shadow it.
 import { validateFlags } from './lib/cli-flags.mjs';
 import { localToday } from './lib/local-today.mjs';
+import { isMainModule } from './lib/is-main-module.mjs';
+import { getCareerOpsRoot } from './path-resolver.mjs';
 
-const CAREER_OPS = dirname(fileURLToPath(import.meta.url));
-const DEFAULT_SESSIONS_DIR = join(CAREER_OPS, 'interview-prep', 'sessions');
-const DEFAULT_QUESTION_BANK_PATH = join(CAREER_OPS, 'interview-prep', 'question-bank.md');
+// The USER's data root. interview-prep/ is USER_PATHS in update-system.mjs, so
+// resolving it from this file's directory meant that with a data root configured
+// the digest looked in the checkout, found nothing, and said "no session files
+// fall inside this range" — blaming the dates for a directory it never opened.
+const DATA_ROOT = getCareerOpsRoot();
+const DEFAULT_SESSIONS_DIR = join(DATA_ROOT, 'interview-prep', 'sessions');
+const DEFAULT_QUESTION_BANK_PATH = join(DATA_ROOT, 'interview-prep', 'question-bank.md');
 
 const ROUND_ENUM = ['screen', 'hiring-manager', 'technical', 'system-design', 'behavioral', 'onsite', 'final'];
 
@@ -699,7 +705,7 @@ const USAGE = `Usage:
 Both bounds are optional; supplying one without the other is rejected rather
 than silently widened.`;
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (isMainModule(import.meta.url)) {
   const args = process.argv.slice(2);
 
   // The script had no --help and no unrecognized-flag check at all, so a

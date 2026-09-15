@@ -1,18 +1,11 @@
-import { spawnHeadlessCli } from "@/lib/spawn-cli.mjs";
 import fs from "node:fs";
 import path from "node:path";
 import { resolveCli } from "@/lib/clis";
 import { careerOpsRoot, readMemory } from "@/lib/career-ops";
 import { getSession } from "@/lib/apply/session";
-import { CAPS } from "@/lib/worker-capabilities.mjs";
-import { scopeFrom } from "@/lib/claude-invocation.mjs";
-import { fencingReport } from "@/lib/cli-fencing.mjs";
+import { buildAnswerPrompt } from "@/lib/apply/answer-prompt.mjs";
+import { runPlanner } from "@/lib/apply/planner";
 import { extractJsonObject } from "@/lib/extract-json-object.mjs";
-
-// Deny list DERIVED, never hand-written: every one of the six advisor argvs
-// that spelled its own omitted MultiEdit, which --permission-mode acceptEdits
-// then auto-approves (#2185, #2507).
-const ADVISOR_SCOPE = scopeFrom("Read,Glob,Grep");
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -85,104 +78,26 @@ export async function POST(req: Request) {
       if (!resolved) return fail(`CLI '${cliId}' not found on this machine`);
       const { spec, binPath } = resolved;
 
-      const fieldsList = s.fields
-        .map((f) => `${f.id}\t${f.type}${f.required ? "*" : ""}\t${f.label}${f.options ? `\t[options: ${f.options.join(" | ")}]` : ""}`)
-        .join("\n");
       const mem = readMemory().trim();
-      const prompt = `You are pre-filling a job application for the user (company/role: ${s.title}). Read cv.md and config/profile.yml; if a matching report for this company exists in reports/, read it too. Ground EVERY answer in the REAL candidate — never invent facts.${mem ? `\n\nDurable notes about the user:\n${mem}` : ""}
-
-FIELDS (id ⇥ type ⇥ label ⇥ options):
-${fieldsList}
-
-For each field give the best answer:
-- identity/contact (name, email, phone, github, linkedin, location) → from profile/cv.
-- free-text (Why us?, cover-letter, "most impactful thing you've built", etc.) → a concise, honest, concrete answer in the candidate's own voice (no buzzwords, active voice, real metrics only). Keep each under ~120 words.
-- select/radio → choose the best-matching option using the EXACT option text from the list.
-- NEVER fill legal / visa / work-authorization / salary / demographic / sensitive fields → set needs_confirmation:true and value:"".
-
-Output ONLY a compact JSON object mapping each field id → {"value": "...", "needs_confirmation": boolean}. No prose, no markdown, no code fence.`;
+      const prompt = buildAnswerPrompt({ title: s.title, fields: s.fields, memory: mem });
 
       log(`Form: "${s.title}" · ${s.fields.length} fields · prompt ${prompt.length} chars · memory ${mem.length} chars`);
       log(`Planner: ${cliId} (${binPath})`);
-      // A runtime with no verified fencing mechanism plans with its default access.
-      // log() is this route's non-fatal channel; it surfaces in the collapsed
-      // "Pre-fill diagnostics" drawer, which is where its other planner facts go
-      // (#2507).
-      const fencing = fencingReport({ cliId: spec.id, cliName: spec.name, capabilities: CAPS.localReadOnly });
-      if (fencing.notice) log(`⚠️ ${fencing.notice}`);
-
-      const isClaude = cliId === "claude";
-      // --strict-mcp-config with no --mcp-config = load ZERO MCP servers → much
-      // faster startup (skips the user's global playwright/gmail/linear/… servers
-      // the planner doesn't need; it only reads local files).
-      const args = isClaude
-        ? ["-p", prompt, "--permission-mode", "acceptEdits", "--strict-mcp-config", "--allowedTools", ADVISOR_SCOPE.allowed, "--disallowedTools", ADVISOR_SCOPE.disallowed]
-        : spec.args(prompt);
-      // Scale the timeout with form size (big forms = more drafting). Cap < maxDuration.
-      const killMs = Math.min(300_000, 150_000 + s.fields.length * 6_000);
-      log(`Spawning planner (timeout ${Math.round(killMs / 1000)}s)…`);
-
-      const result = await new Promise<{ buf: string; code: number | null; signal: NodeJS.Signals | null }>((resolve) => {
-        // spawnHeadlessCli closes stdin right after spawning, so the CLI doesn't
-        // wait on piped input that will never arrive.
-        // Drafts answers from local files only: the Claude branch allows
-        // Read,Glob,Grep and denies WebFetch/WebSearch along with every write
-        // tool, so Codex gets a true read-only sandbox here.
-        let child;
-        try {
-          child = spawnHeadlessCli(
-            binPath,
-            args,
-            { cwd: careerOpsRoot(), env: process.env },
-            // spec.id, not the request's cliId: same value once resolveCli has
-            // accepted it, but typed as the canonical id rather than the caller's
-            // optional string.
-            { cliId: spec.id, capabilities: CAPS.localReadOnly },
-          );
-        } catch (e) {
-          // Fencing refuses an argv that contradicts the capability record. Route
-          // it through fail() so the NDJSON stream reports the reason and closes;
-          // an escaping throw inside this executor would leave the promise pending
-          // and the client waiting on a stream that never ends.
-          fail(e instanceof Error ? e.message : "failed to start the planner");
-          return resolve({ buf: "", code: null, signal: null });
-        }
-        let buf = "";
-        let firstByteAt = 0;
-        const hb = setInterval(() => {
-          log(`…running ${Math.round((Date.now() - t0) / 1000)}s · ${buf.length} chars received`);
-        }, 4000);
-        child.stdout.on("data", (d: Buffer) => {
-          if (!firstByteAt) {
-            firstByteAt = Date.now();
-            log(`first output byte at ${Math.round((firstByteAt - t0) / 1000)}s`);
-          }
-          buf += d.toString();
-        });
-        child.stderr.on("data", (d: Buffer) => {
-          const e = d.toString().trim();
-          if (e) log(`stderr: ${e.slice(0, 160).replace(/\s+/g, " ")}`);
-        });
-        const killer = setTimeout(() => {
-          log("TIMEOUT reached → SIGTERM");
-          try {
-            child.kill("SIGTERM");
-          } catch {
-            /* ignore */
-          }
-        }, killMs);
-        child.on("close", (code, signal) => {
-          clearTimeout(killer);
-          clearInterval(hb);
-          resolve({ buf, code, signal });
-        });
-        child.on("error", (e) => {
-          clearTimeout(killer);
-          clearInterval(hb);
-          log(`spawn error: ${e.message}`);
-          resolve({ buf, code: null, signal: null });
-        });
+      const result = await runPlanner({
+        cliId,
+        spec,
+        binPath,
+        prompt,
+        fieldCount: s.fields.length,
+        cwd: careerOpsRoot(),
+        t0,
+        log,
       });
+
+      // Fencing refused to start the planner (#2507): runPlanner already logged
+      // the reason; report it as THE error, before the empty-output branch below
+      // turns it into an unrelated "produced no output".
+      if (result.refused) return fail(result.refused);
 
       log(`Planner exited code=${result.code} signal=${result.signal} · ${result.buf.length} chars total`);
       log(`output head: ${result.buf.slice(0, 100).replace(/\s+/g, " ") || "(empty)"}`);

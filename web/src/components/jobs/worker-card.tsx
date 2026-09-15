@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Check, X, Loader2, AlertTriangle } from "lucide-react";
 import type { Job } from "@/components/jobs/job-store";
+import { jobErrorHint } from "@/lib/job-error-hint.mjs";
 import { cn } from "@/lib/cn";
 import { isFencingNotice } from "@/lib/cli-fencing.mjs";
 
@@ -23,18 +24,10 @@ const STEP_LABELS: Record<string, string> = {
 };
 const humanizeStep = (label: string): string => STEP_LABELS[label] ?? label;
 
-// Auth/sign-in failures are the most common real error — detect them so we can give
-// a concrete next step instead of a dead end (#8).
-function isAuthError(job: Job): boolean {
-  if (job.status !== "error") return false;
-  const hay = `${job.steps[job.steps.length - 1]?.label ?? ""} ${job.text}`.toLowerCase();
-  return /auth|login|sign[ -]?in|credential|api[ -]?key|unauthorized|not authenticated|installed and authenticated/.test(hay);
-}
-
 // The unfenced-runtime notice is emitted as the run's FIRST step, before the CLI
 // produces any output — and this card renders only the newest step, so it would be
 // displaced within a second of the run starting. Scan the whole list instead, and
-// render it in the sticky slot below, the same shape isAuthError already uses.
+// render it in the sticky slot below, the same shape jobErrorHint already uses.
 // Returns the notice ITSELF, not a boolean. There are two shapes — a runtime that
 // cannot be restricted at all, and one only partly restricted — and a card that
 // matched either then printed one hardcoded sentence told a sandboxed Codex run it
@@ -99,7 +92,7 @@ export function WorkerCard({
   const bottom = job.status === "done" && job.result?.summary ? job.result.summary : last;
   const inline = variant === "inline";
   const hasScore = job.result?.score != null;
-  const authError = isAuthError(job);
+  const errorHint = jobErrorHint(job);
   const fencing = fencingNotice(job);
   const tokens = job.status === "done" ? job.cost?.tokens ?? 0 : 0;
 
@@ -141,9 +134,9 @@ export function WorkerCard({
           {running ? `${last ?? "Working"} · ${fmtElapsed(elapsed)}` : bottom}
         </div>
       )}
-      {authError && (
+      {errorHint && (
         <div className={cn("mt-1 text-amber-700 dark:text-amber-400", inline ? "text-xs" : "text-[10px]")}>
-          Sign your CLI in from Config, then re-run.
+          {errorHint.text}
         </div>
       )}
       {fencing && (

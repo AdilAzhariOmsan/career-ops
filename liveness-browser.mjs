@@ -481,7 +481,17 @@ export function createHeadedPageProvider(chromium) {
   return {
     async get() {
       if (page && !isCachedPageUsable()) {
-        // Drop the dead handles and fall through to a fresh launch below.
+        // Drop the dead handles and fall through to a fresh launch below. If the
+        // page went away but its Chromium is still up, tear that browser down
+        // first: close() only knows the current handle, so a replacement launch
+        // would otherwise leave the stale process running until exit.
+        if (browser && (typeof browser.isConnected !== 'function' || browser.isConnected())) {
+          try {
+            await browser.close();
+          } catch {
+            // best-effort teardown
+          }
+        }
         page = null;
         browser = null;
       }

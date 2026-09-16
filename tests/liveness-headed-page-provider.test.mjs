@@ -110,3 +110,20 @@ const makeChromium = () => {
     ? pass('returns null when the page is dead and a relaunch fails')
     : fail('should return null rather than a dead page when relaunch fails');
 }
+
+// 5. A closed page whose browser is still connected must not orphan that browser:
+//    close() only knows the current handle, so the stale one is torn down before
+//    the replacement is launched.
+{
+  const chromium = makeChromium();
+  const provider = createHeadedPageProvider(chromium);
+  const first = await provider.get();
+  first.closed = true; // window gone, Chromium process still up
+
+  const second = await provider.get();
+  const stale = chromium.launches[0];
+
+  second && second !== first && stale.connected === false && chromium.launches.length === 2
+    ? pass('a stale browser is closed before its replacement is launched')
+    : fail('get() replaced the page but left the previous browser running');
+}

@@ -1,4 +1,4 @@
-// tests/jd-skill-gap-data-root.test.mjs — the JD skill classifier compares a
+// tests/jd-skill-gap.test.mjs — the JD skill classifier compares a
 // posting against the user's cv.md, so it has to find that cv.md.
 //
 //   const CV_PATH = 'cv.md';   // -> process.cwd()
@@ -14,7 +14,7 @@
 // creates a second copy in the wrong place. Everything this script reports is a
 // comparison against that file, so without it there is nothing to say at all.
 //
-// Run:  node --test tests/jd-skill-gap-data-root.test.mjs
+// Run:  node --test tests/jd-skill-gap.test.mjs
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';

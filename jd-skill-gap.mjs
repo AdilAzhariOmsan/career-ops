@@ -835,7 +835,8 @@ if (selfTestMode) {
     process.exit(1);
   }
   if (!existsSync(CV_PATH)) {
-    console.error(`Error: ${CV_PATH} not found — this is a user-layer file, create it first.`);
+    console.error(`Error: cv.md not found at ${CV_PATH}`);
+    console.error('Set CAREER_OPS_ROOT (or CAREER_OPS_DATA_DIR, or a .career-ops-data marker) to point at your data directory.');
     process.exit(1);
   }
 

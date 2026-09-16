@@ -124,7 +124,7 @@ export default {
     for (let page = 0; page < maxPages; page++) {
       if (page > 0) await wait(PAGE_DELAY_MS);
       const url = `${cfg.searchBase}?qli=true&query=&sort=score&itemsPerPage=${ITEMS_PER_PAGE}&pageNum=${page}`;
-      const html = await fetchTextWithRetry(ctx, url, { headers: { accept: 'text/html' } });
+      const html = await fetchTextWithRetry(ctx, url, { headers: { accept: 'text/html' }, redirect: 'error' });
       const rows = parseHits(html, cfg.origin);
       if (rows.length === 0) break; // past the last page
 

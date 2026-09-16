@@ -49,12 +49,15 @@ try {
   const dbPages = [dbHtml, '<html>' + dbHit('700000', 'C', 'Berlin, Deutschland') + '</html>', '<html></html>'];
   let dbCalls = 0;
   const dbSeen = [];
-  const dbCtx = { sleep: async () => {}, fetchText: async (url) => { dbSeen.push(url); return dbPages[dbCalls++] ?? '<html></html>'; } };
+  const dbOpts = [];
+  const dbCtx = { sleep: async () => {}, fetchText: async (url, opts) => { dbSeen.push(url); dbOpts.push(opts); return dbPages[dbCalls++] ?? '<html></html>'; } };
   const dbJobs = await db.fetch({ name: 'Deutsche Bahn', api: 'https://db.jobs/service/search/de-de/5441588' }, dbCtx);
   if (dbJobs.length === 3 && dbCalls === 3) pass('deutschebahn.fetch() paginates and stops on the first empty page');
   else fail(`deutschebahn.fetch() returned ${dbJobs.length} jobs after ${dbCalls} calls`);
   if (dbSeen[0]?.includes('pageNum=0') && dbSeen[1]?.includes('pageNum=1')) pass('deutschebahn.fetch() pages via pageNum=N (0-based)');
   else fail(`deutschebahn.fetch() paged wrong: ${JSON.stringify(dbSeen.map((u) => u.match(/pageNum=\d+/)?.[0]))}`);
+  if (dbOpts.every((o) => o?.redirect === 'error')) pass('deutschebahn.fetch() passes redirect:\'error\' on every request');
+  else fail(`deutschebahn.fetch() redirect option wrong: ${JSON.stringify(dbOpts.map((o) => o?.redirect))}`);
 
   // max_pages safety valve — a small explicit cap stops the walk even though
   // every page keeps returning fresh ids (DB's board runs into the thousands,

@@ -39,6 +39,11 @@ ok('recognized hash-route job IDs stay distinct', () => {
     normalizeUrl('https://jobs.example.com/careers#/jobs/123'),
     normalizeUrl('https://jobs.example.com/careers#/jobs/456'));
 });
+ok('pre-existing internal fragment key is preserved beside promoted hash job ID', () => {
+  assert.equal(
+    normalizeUrl('https://jobs.example.com/careers?_career_ops_fragment_job_id=query-id#/jobs/hash-id'),
+    'https://jobs.example.com/careers?_career_ops_fragment_job_id=hash-id&_career_ops_fragment_job_id=query-id');
+});
 ok('cosmetic fragments still collapse onto the fragment-free key', () => {
   assert.equal(
     normalizeUrl('https://jobs.example.com/careers#apply'),

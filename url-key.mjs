@@ -62,10 +62,10 @@ export function promoteKnownFragmentIdentity(url) {
   try { jobId = decodeURIComponent(match[1]); } catch { return; }
   if (!jobId) return;
   if (url.hostname.toLowerCase() === 'app.mokahr.com') {
-    url.searchParams.set('mokahr_job_id', jobId);
+    url.searchParams.append('mokahr_job_id', jobId);
     return;
   }
-  url.searchParams.set('_career_ops_fragment_job_id', jobId);
+  url.searchParams.append('_career_ops_fragment_job_id', jobId);
 }
 
 /**

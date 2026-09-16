@@ -61,6 +61,15 @@ try {
   if (hashJob1 !== hashJob2) pass('recognized hash-route job IDs stay distinct');
   else fail(`collapsed distinct hash-route postings onto ${hashJob1}`);
 
+  const preExistingInternalParam = normalizeUrlForDedup(
+    'https://jobs.example.com/careers?_career_ops_fragment_job_id=query-id#/jobs/hash-id',
+  );
+  if (preExistingInternalParam === 'https://jobs.example.com/careers?_career_ops_fragment_job_id=query-id&_career_ops_fragment_job_id=hash-id') {
+    pass('pre-existing internal fragment key is preserved beside promoted hash job ID');
+  } else {
+    fail(`pre-existing fragment query key was overwritten: ${preExistingInternalParam}`);
+  }
+
   const cosmeticHash = normalizeUrlForDedup('https://jobs.example.com/careers#apply');
   const fragmentFree = normalizeUrlForDedup('https://jobs.example.com/careers');
   if (cosmeticHash === fragmentFree) pass('cosmetic fragments still collapse onto the fragment-free key');

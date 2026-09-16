@@ -86,6 +86,13 @@ test("generic hash-route jobs keep distinct identity in both core and web keys",
   assert.equal(webKey(jobB), coreKey(jobB));
 });
 
+test("promoted fragment identity does not overwrite pre-existing internal comparison params", () => {
+  const input = "https://jobs.example.com/careers?_career_ops_fragment_job_id=query-id#/jobs/hash-id";
+  const expected = "https://jobs.example.com/careers?_career_ops_fragment_job_id=hash-id&_career_ops_fragment_job_id=query-id";
+  assert.equal(webKey(input), expected);
+  assert.equal(coreKey(input), expected);
+});
+
 test("host+pathname-only shape must not return (regression lock on the pre-fix canon())", () => {
   // The pre-fix canon() discarded the ENTIRE query string, so both of these
   // collapsed to "boards.greenhouse.io/acme/jobs/apply". If that shape comes

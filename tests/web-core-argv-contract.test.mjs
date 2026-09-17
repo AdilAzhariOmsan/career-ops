@@ -98,6 +98,13 @@ const CALL_SITES = [
  * @returns {{skipped: boolean}}
  */
 export function verifyWebStaticSources({ root = ROOT, reportPass = pass, reportFail = fail } = {}) {
+  // web/ ships as its own release-please component and is excluded from
+  // SYSTEM_PATHS wholesale (validate-system-paths-coverage.mjs,
+  // EXCLUDE_PREFIXES = ['web/']), so `update-system.mjs apply` never installs
+  // it. An install created that way has no web/ at all, and the two checks
+  // below read the web sources unconditionally: readFileSync threw ENOENT and
+  // took the whole suite with it, so the argv probes above — which need only
+  // the core scripts and are the point of this file — reported nothing either.
   const webRoot = join(root, 'web');
   if (!existsSync(webRoot)) {
     reportPass('web/ is not present in this checkout — skipping static argv-source contract');

@@ -68,6 +68,43 @@ try {
   if (cappedJobs.length === 3 && capCalls === 3) pass('deutschebahn.fetch() honors entry.max_pages and stops even with more pages available');
   else fail(`deutschebahn.fetch() max_pages cap wrong: ${cappedJobs.length} jobs after ${capCalls} calls`);
 
+  // A transient (no-status) fetch failure is retried via fetchTextWithRetry;
+  // the walk recovers instead of dying on a single flaky page.
+  let retryCalls = 0;
+  const retryCtx = {
+    sleep: async () => {},
+    fetchText: async () => {
+      retryCalls++;
+      if (retryCalls === 1) throw new Error('This operation was aborted');
+      if (retryCalls === 2) return dbHit('800001', 'Retried Job', 'Berlin, Deutschland');
+      return '<html></html>'; // next page: empty, stop
+    },
+  };
+  const retriedJobs = await db.fetch({ name: 'Deutsche Bahn', api: 'https://db.jobs/service/search/de-de/5441588' }, retryCtx);
+  if (retriedJobs.length === 1 && retryCalls === 3) pass('deutschebahn.fetch() retries a transient failure and recovers');
+  else fail(`deutschebahn.fetch() retry wrong: ${retriedJobs.length} jobs after ${retryCalls} calls`);
+
+  // A deterministic (non-transient) failure — a 4xx other than 429 — must NOT
+  // be retried: it is the server telling us the request itself is wrong.
+  let noRetryCalls = 0;
+  const noRetryCtx = {
+    sleep: async () => {},
+    fetchText: async () => {
+      noRetryCalls++;
+      const err = new Error('Not Found');
+      err.status = 404;
+      throw err;
+    },
+  };
+  let dbThrew = false;
+  try {
+    await db.fetch({ name: 'Deutsche Bahn', api: 'https://db.jobs/service/search/de-de/5441588' }, noRetryCtx);
+  } catch {
+    dbThrew = true;
+  }
+  if (dbThrew && noRetryCalls === 1) pass('deutschebahn.fetch() does not retry a non-429 4xx');
+  else fail(`deutschebahn.fetch() should fail fast on a 404, got threw=${dbThrew} calls=${noRetryCalls}`);
+
   // Non-positive/non-integer max_pages falls back to the provider default
   // (60) rather than collapsing to zero pages.
   let fallbackCalls = 0;

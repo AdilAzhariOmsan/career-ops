@@ -169,6 +169,30 @@ try {
     fail(`manfred.fetch() made ${calls.length} request(s): ${JSON.stringify(calls)}`);
   }
 
+  // A transient (no-status) fetch failure is retried via fetchJsonWithRetry,
+  // and the 25s timeout is actually passed through on every attempt.
+  let retryCalls = 0;
+  let lastOpts;
+  const retryCtx = {
+    transport: 'http',
+    sleep: async () => {},
+    fetchJson: async (_url, options) => {
+      retryCalls++;
+      lastOpts = options;
+      if (retryCalls === 1) throw new Error('This operation was aborted');
+      return [activeOffer];
+    },
+    fetchText: async () => { throw new Error('fetchText should not be called'); },
+  };
+  const retriedJobs = await manfred.fetch({ name: 'getManfred', provider: 'manfred' }, retryCtx);
+  if (retriedJobs.length === 1 && retryCalls === 2) pass('manfred.fetch() retries a transient failure and recovers');
+  else fail(`manfred.fetch() retry wrong: ${retriedJobs.length} jobs after ${retryCalls} calls`);
+  if (lastOpts?.timeoutMs === 25_000 && lastOpts?.redirect === 'error') {
+    pass('manfred.fetch() passes timeoutMs:25000 and redirect:\'error\' on every attempt');
+  } else {
+    fail(`manfred.fetch() request options wrong: ${JSON.stringify(lastOpts)}`);
+  }
+
   // unexpected shape throws
   let threw = false;
   try {

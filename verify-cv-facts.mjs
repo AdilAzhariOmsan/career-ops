@@ -249,9 +249,19 @@ export function stripMarkup(text, { keepLineBreaks = false } = {}) {
     // `**...**` run in two. Bold may span a wrapped line (`keepLineBreaks`);
     // italic is deliberately kept single-line, to stay conservative about the
     // more collision-prone single-asterisk form.
+    //
+    // Deliberately NOT letter/digit-boundary-guarded (e.g. `(?<![\p{L}\p{N}_])`)
+    // even though that would preserve literal patterns like `2*3*4` or
+    // `foo*bar*baz`: a LaTeX star command directly abutting the next word
+    // (`\section*{Foo}and*emphasis*done` -> `Foo and*emphasis*done`) leaves
+    // the italic span's markers touching letters on both sides, which such a
+    // guard rejects — turning real emphasis back into a false negative. The
+    // covered CV/article-digest sources never contain literal multiplication
+    // asterisks, so this trades an untested hypothetical for a real,
+    // regression-tested case (see the LaTeX star-command test below).
     .replace(/\*\*(\S(?:[\s\S]*?\S)?)\*\*/g, ' $1 ')
     .replace(/__(\S(?:[\s\S]*?\S)?)__/g, ' $1 ')
-    .replace(/(?<![\p{L}\p{N}_])\*(\S(?:[^\n*]*\S)?)\*(?![\p{L}\p{N}_])/gu, ' $1 ')
+    .replace(/\*(\S(?:[^\n*]*\S)?)\*/g, ' $1 ')
     .replace(/&nbsp;/g, ' ')
     .replace(/&amp;/g, '&')
     // keepLineBreaks preserves a newline as a CLAUSE boundary for the plan-horizon

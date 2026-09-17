@@ -162,27 +162,34 @@ expired('This job listing is closed as of today.') === 'expired'
   ? pass('"This job listing is closed" still -> expired (regression)')
   : fail('"This job listing is closed" regressed');
 
-// Reported on nodesk.co: the closure banner comes back from innerText as
-// "JOB EXPIRED" (uppercase). The existing /this job has expired/i pattern
-// required a full sentence, so a bare banner missed. Widened with
-// /\bjob expired\b/i, which is case-insensitive.
-expired('JOB EXPIRED\nThis role was posted 90 days ago.') === 'expired'
-  ? pass('bare "JOB EXPIRED" banner -> expired (was: uncertain/no_apply_control)')
-  : fail('bare "JOB EXPIRED" banner NOT classified expired');
-
-expired('Notice: job expired on 2026-01-01.') === 'expired'
-  ? pass('lowercase "job expired" -> expired (case-insensitive)')
-  : fail('lowercase "job expired" NOT classified expired');
-
 // The reported failure mode is a page with a body but NO apply control (see
 // the "× 3" rows in the issue). Verify the fix also holds in that scenario:
 // body over MIN_CONTENT_CHARS, applyControls: [], the closure banner alone
 // must decide expired -- not fall through to insufficient_content or
 // no_apply_control.
+//
+// The two banners carry DIFFERENT codes on purpose: "This role is closed"
+// is a hard-expired signal (strong enough to override an apply control),
+// so it fires from HARD_EXPIRED_PATTERNS with code expired_body. Bare
+// "JOB EXPIRED" is a weak signal (a "Similar jobs" carousel entry on a
+// LIVE page carries the same string), so it fires from SOFT_EXPIRED_PATTERNS
+// after the apply-control branch and carries code expired_body_soft. The
+// distinction is measured here, not just in the tier assertion below,
+// because a future refactor that put both banners back in one tier would
+// keep the surface result === 'expired' green while breaking the whole
+// invariant santifer's #4194 review is about.
 const padding = 'Job description follows. '.repeat(20);
-for (const { text, label } of [
-  { text: `This role is closed. ${padding}`, label: '"This role is closed" (no apply control, padded body)' },
-  { text: `JOB EXPIRED. ${padding}`, label: 'bare "JOB EXPIRED" (no apply control, padded body)' },
+for (const { text, expectedCode, label } of [
+  {
+    text: `This role is closed. ${padding}`,
+    expectedCode: 'expired_body',
+    label: '"This role is closed" (no apply control, padded body)',
+  },
+  {
+    text: `JOB EXPIRED. ${padding}`,
+    expectedCode: 'expired_body_soft',
+    label: 'bare "JOB EXPIRED" (no apply control, padded body)',
+  },
 ]) {
   const verdict = classifyLiveness({
     status: 200,
@@ -190,9 +197,9 @@ for (const { text, label } of [
     bodyText: text,
     applyControls: [],
   });
-  verdict.result === 'expired' && verdict.code === 'expired_body'
-    ? pass(`${label} -> expired/expired_body`)
-    : fail(`${label} classified ${verdict.result}/${verdict.code}, expected expired/expired_body`);
+  verdict.result === 'expired' && verdict.code === expectedCode
+    ? pass(`${label} -> expired/${expectedCode}`)
+    : fail(`${label} classified ${verdict.result}/${verdict.code}, expected expired/${expectedCode}`);
 }
 
 // False-positive guard: real JD copy mentions "role" and "position"
@@ -209,7 +216,8 @@ classifyLiveness({
 
 // False-positive guard for the "job expired" pattern: \b boundaries mean it
 // only matches those two words adjacent. Split across a sentence, an active
-// posting must stay active.
+// posting must stay active. Belt-and-suspenders against the SOFT tier —
+// even before the tier move, adjacency alone should keep this active.
 classifyLiveness({
   status: 200,
   finalUrl: 'https://careers.example.com/job/123',
@@ -218,3 +226,67 @@ classifyLiveness({
 }).result === 'active'
   ? pass('active posting with non-adjacent "job" / "expired" stays active')
   : fail('false positive: non-adjacent "job" / "expired" read as expired');
+
+console.log('\nliveness-core — SOFT_EXPIRED_PATTERNS tier: weak signals must lose to a visible apply control (#4194)');
+
+// santifer's #4194 review fixtures. Each is a body a live posting can
+// legitimately carry (carousel item, filter chip, footer FAQ), and each
+// has a working apply control. Before the tier move, the bare "\bjob
+// expired\b" pattern lived in HARD_EXPIRED and fired here BEFORE the
+// apply-control branch, returning expired -- filtering a live posting
+// out of scans permanently (see the 5xx-guard comment in liveness-core
+// for the underlying dedup mechanism).
+//
+// The tests below fail on 117aea0 (the first PR commit) and pass on the
+// follow-up. Verified in the docker container before pushing.
+const softApplyPresent = 'Job description follows. '.repeat(20);
+for (const { text, label } of [
+  {
+    text: `Senior AI Engineer\n${softApplyPresent}\nSimilar jobs: Software Engineer at Contoso — Job Expired`,
+    label: '"Similar jobs" carousel entry reading "Job Expired" (live posting)',
+  },
+  {
+    text: `Filters: Hide job expired · Remote only · Posted this week\n${softApplyPresent}`,
+    label: '"Hide job expired" filter chip on a live posting',
+  },
+  {
+    text: `${softApplyPresent}\nFAQ: What happens when a job expired? See our archive policy.`,
+    label: 'footer FAQ mentioning "when a job expired?" on a live posting',
+  },
+]) {
+  const verdict = classifyLiveness({
+    status: 200,
+    finalUrl: 'https://careers.example.com/job/123',
+    bodyText: text,
+    applyControls: ['Apply now'],
+  });
+  verdict.result === 'active' && verdict.code === 'apply_control_visible'
+    ? pass(`${label} -> active/apply_control_visible (SOFT_EXPIRED loses to Apply)`)
+    : fail(`${label} classified ${verdict.result}/${verdict.code}, expected active/apply_control_visible`);
+}
+
+// Closed-loop / closed-form compound guard on the closed pattern. Real
+// engineering JDs commonly say "closed-loop control" or "closed-form
+// solution"; the earlier /this (?:job|role|position)(?: listing)? is
+// closed/i (no trailing boundary) matched the "is closed" fragment from
+// "is closed-loop" and returned expired. \b(?!-) closes it.
+for (const { text, label } of [
+  {
+    text: 'This role is closed-loop control of the platform, integrating sensor feedback with actuation. Apply now.',
+    label: '"This role is closed-loop control..." (control-systems JD)',
+  },
+  {
+    text: 'This position is closed-form solvable, unlike the general case that requires numerical methods.',
+    label: '"This position is closed-form solvable..." (ML/math JD)',
+  },
+]) {
+  const verdict = classifyLiveness({
+    status: 200,
+    finalUrl: 'https://careers.example.com/job/123',
+    bodyText: text,
+    applyControls: ['Apply now'],
+  });
+  verdict.result === 'active' && verdict.code === 'apply_control_visible'
+    ? pass(`${label} -> active/apply_control_visible`)
+    : fail(`${label} classified ${verdict.result}/${verdict.code}, expected active/apply_control_visible`);
+}

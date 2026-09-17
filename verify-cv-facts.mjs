@@ -251,7 +251,7 @@ export function stripMarkup(text, { keepLineBreaks = false } = {}) {
     // more collision-prone single-asterisk form.
     .replace(/\*\*(\S(?:[\s\S]*?\S)?)\*\*/g, ' $1 ')
     .replace(/__(\S(?:[\s\S]*?\S)?)__/g, ' $1 ')
-    .replace(/\*(\S(?:[^\n*]*\S)?)\*/g, ' $1 ')
+    .replace(/(?<![\p{L}\p{N}_])\*(\S(?:[^\n*]*\S)?)\*(?![\p{L}\p{N}_])/gu, ' $1 ')
     .replace(/&nbsp;/g, ' ')
     .replace(/&amp;/g, '&')
     // keepLineBreaks preserves a newline as a CLAUSE boundary for the plan-horizon

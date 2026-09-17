@@ -139,6 +139,15 @@ try {
   if (normalizeManfredOffer({ ...activeOffer, slug: '' }) === null) pass('normalizeManfredOffer drops an offer with no slug');
   else fail('slug-less offer should be dropped');
 
+  // A lone UTF-16 surrogate in slug would throw URIError out of
+  // encodeURIComponent inside the URL-building step; the offer is dropped
+  // instead of aborting the loop over the whole catalogue.
+  if (normalizeManfredOffer({ ...activeOffer, slug: 'bad-\uD800-slug' }) === null) {
+    pass('normalizeManfredOffer drops an offer whose slug has a lone surrogate');
+  } else {
+    fail('a lone-surrogate slug should be dropped, not throw or produce a malformed URL');
+  }
+
   // company falls back to the entry name
   const bare = normalizeManfredOffer({ ...activeOffer, company: null }, 'EntryName');
   if (bare?.company === 'EntryName') pass('normalizeManfredOffer falls back to the entry name for company');

@@ -15,6 +15,13 @@ nothing leaves your machine until you press Submit yourself).
 
 <!-- ENTRIES -->
 
+<!-- hire n=9 level=role role="System Engineer" sector="fintech" geo="Toronto, Canada, Hybrid" weeks=6 link="https://github.com/career-ops-hq/career-ops/issues/4229" -->
+### Hire #9
+
+> I evaluated 634 postings, applied 101 posts, got my top choice offer. Career-ops prepared me for 80%+ of the interview questions that actually showed up. Career-ops has helped me t
+
+**System Engineer** · fintech · Toronto, Canada, Hybrid · 6 weeks · [story →](https://github.com/career-ops-hq/career-ops/issues/4229)
+
 <!-- hire n=8 level=role role="Senior Product Manager" sector="Big tech" geo="Miami, FL" weeks=8 link="https://github.com/career-ops-hq/career-ops/issues/3760" -->
 ### Hire #8
 

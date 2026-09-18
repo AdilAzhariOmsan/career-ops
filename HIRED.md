@@ -15,6 +15,13 @@ nothing leaves your machine until you press Submit yourself).
 
 <!-- ENTRIES -->
 
+<!-- hire n=10 level=role role="Senior Systems Engineer (MARCENT)" sector="Federal" geo="Tampa, FL" weeks=20 link="https://github.com/career-ops-hq/career-ops/issues/4277" -->
+### Hire #10
+
+> This one scored as a genuine CSfC/PKI subject-matter-expert match right in my home market, and the interview loop moved from a strong evaluation to a signed offer within a few week
+
+**Senior Systems Engineer (MARCENT)** · Federal · Tampa, FL · 20 weeks · [story →](https://github.com/career-ops-hq/career-ops/issues/4277)
+
 <!-- hire n=9 level=role role="System Engineer" sector="fintech" geo="Toronto, Canada, Hybrid" weeks=6 link="https://github.com/career-ops-hq/career-ops/issues/4229" -->
 ### Hire #9
 

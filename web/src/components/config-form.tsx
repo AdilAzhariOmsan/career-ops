@@ -194,30 +194,19 @@ export function ConfigForm() {
                         disabled
                         className="flex flex-1 items-center gap-2 text-left max-sm:min-h-[44px] cursor-default"
                       >
-                        <span
-                          className={cn(
-                            "font-medium",
-                            "text-muted",
-                          )}
-                        >
+                        <span className="font-medium text-muted">
                           {c.name}
                         </span>
                         <span className="font-mono text-xs text-faint">{c.run}</span>
                       </button>
-                      {c.installed ? (
-                        <span className="hidden max-w-[40%] shrink-0 truncate text-xs text-faint sm:block">
-                          {c.path}
-                        </span>
-                      ) : (
-                        <a
-                          href={c.url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="inline-flex shrink-0 items-center justify-center gap-1 text-xs text-brand hover:underline max-sm:min-h-[44px]"
-                        >
-                          Install <ExternalLink className="size-3" />
-                        </a>
-                      )}
+                      <a
+                        href={c.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex shrink-0 items-center justify-center gap-1 text-xs text-brand hover:underline max-sm:min-h-[44px]"
+                      >
+                        Install <ExternalLink className="size-3" />
+                      </a>
                     </div>
                   );
                 })}

@@ -126,7 +126,13 @@ export function normalizeJd(raw, finalUrl, textCap = JD_TEXT_CAP) {
   // rendered body, and preferring the stub there would break the common case to
   // fix the rare one.
   const ldText = jdHtmlToText(raw?.jsonLdDescription || '');
-  const domText = String(raw?.text || '');
+  // Normalized length, not raw length: raw DOM text on a chrome-heavy page is
+  // mostly repeated newlines ("Apply now\n\n\n\n\n\nSave job\n\n\n\n\n\n..."), which
+  // can out-length a shorter-in-raw-HTML but substantive JSON-LD description
+  // before either side is compacted. Comparing pre-collapse defeats the whole
+  // point of "longer wins". No cap here (Infinity) — only the comparison needs
+  // normalizing; the real textCap is still applied below.
+  const domText = compactText(String(raw?.text || ''), Infinity);
   const text = ldText.length > domText.length ? ldText : domText;
 
   return {
@@ -761,16 +767,20 @@ async function readDom(page) {
         : Array.isArray(parsed?.['@graph'])
           ? parsed['@graph']
           : [parsed];
+      // @type is the bare token in most feeds, but some publishers use the
+      // absolute schema.org IRI instead — both forms occur in the wild.
+      const isJobPostingType = (t) =>
+        t === 'JobPosting' || t === 'http://schema.org/JobPosting' || t === 'https://schema.org/JobPosting';
       for (const node of candidates) {
         const type = node?.['@type'];
-        const isJobPosting = Array.isArray(type)
-          ? type.includes('JobPosting')
-          : type === 'JobPosting';
+        const isJobPosting = Array.isArray(type) ? type.some(isJobPostingType) : isJobPostingType(type);
         if (!isJobPosting) continue;
         const desc = typeof node.description === 'string' ? node.description : '';
         if (desc.length > jsonLdDescription.length) {
           jsonLdDescription = desc;
-          if (typeof node.title === 'string') jsonLdTitle = node.title;
+          // Always reset, never carry over: a stub JobPosting's title must not
+          // survive onto the description of a later, longer JobPosting node.
+          jsonLdTitle = typeof node.title === 'string' ? node.title : '';
         }
       }
     }

@@ -318,6 +318,7 @@ npm run gemini:eval -- "JD text here"
 career-ops uses a shared command router. In CLIs that register slash commands, it looks like this:
 
 ```
+/career-ops           → Show all available commands
 /career-ops {JD}      → AUTO-PIPELINE: evaluate + report + PDF + tracker (paste text or URL)
 /career-ops pipeline  → Process pending URLs from inbox (data/pipeline.md)
 /career-ops oferta    → Evaluation only A-F (no auto PDF)
@@ -355,6 +356,7 @@ career-ops uses a shared command router. In CLIs that register slash commands, i
 /career-ops followup  → Follow-up cadence tracker: flag overdue, generate drafts
 /career-ops reply-watch → Classify employer replies and suggest tracker updates
 /career-ops outcome   → Record application outcome & archive artifacts
+/career-ops calibrate → Advisory report: do your evaluation scores predict your real outcomes? Reads /outcome data; never changes scoring
 /career-ops update    → Update career-ops system files with diff preview + compat check
 ```
 

@@ -331,6 +331,7 @@ career-ops uses a shared command router. In CLIs that register slash commands, i
 /career-ops interview/plan → Time-blocked prep plan for an upcoming interview
 /career-ops interview/practice → Practice interview, one question at a time with feedback
 /career-ops interview/debrief → Post-interview debrief: close gaps, predict next round
+/career-ops interview-redflag → Analyze employer warning signs before joining a company
 /career-ops pdf       → PDF only, ATS-optimized CV
 /career-ops text      → Tailored markdown CV (mirrors cv.md, no PDF)
 /career-ops latex     → Export CV as LaTeX/Overleaf .tex
@@ -352,6 +353,7 @@ career-ops uses a shared command router. In CLIs that register slash commands, i
 /career-ops titles    → Suggest adjacent job titles from your CV to broaden the search
 /career-ops upskill   → Aggregate skill-gap analysis from your evaluated reports
 /career-ops followup  → Follow-up cadence tracker: flag overdue, generate drafts
+/career-ops reply-watch → Classify employer replies and suggest tracker updates
 /career-ops outcome   → Record application outcome & archive artifacts
 /career-ops update    → Update career-ops system files with diff preview + compat check
 ```

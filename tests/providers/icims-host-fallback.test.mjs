@@ -102,6 +102,21 @@ const onlyPrimary = (ctx) => ctx.calls.length > 0 && ctx.calls.every((c) => c.st
   }
 }
 
+// A failure ON THE FALLBACK is not swallowed either: the primary's first-page
+// 404 selects the fallback, and whatever the fallback answers is what the
+// caller sees. A throttle there must surface as a throttle, so dead-board
+// tracking reads the board as "unknown", never "dead".
+{
+  const ctx = mkCtx({ [FALLBACK]: httpError(429) });
+  try {
+    await icims.fetch(entry, ctx);
+    fail('fetch swallowed a 429 raised by the fallback host');
+  } catch (err) {
+    if (err.status === 429 && ctx.calls.join(',') === `${PRIMARY}#0,${FALLBACK}#0`) pass('a 429 from the fallback host surfaces, after exactly one request per host');
+    else fail(`fallback 429: status=${err.status} calls=${ctx.calls.join(',')}`);
+  }
+}
+
 // Fallback URLs that are not https *.icims.com are ignored.
 {
   const ctx = mkCtx({ 'https://evil.example': [page(card('https://evil.example', 6, 'Role F'))] });

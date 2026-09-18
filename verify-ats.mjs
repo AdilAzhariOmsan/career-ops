@@ -59,6 +59,12 @@ const ATS_SAFE_FONTS = new Set([
   'noto sans cjk jp', 'noto sans jp', 'meiryo', 'ms pgothic', 'pingfang sc',
   'hiragino sans gb', 'microsoft yahei', 'noto sans cjk sc', 'noto sans sc',
   'source han sans sc',
+  // Korean (html[lang="ko"]) and Traditional Chinese (html[lang="zh-TW"]) — the
+  // template declares these stacks unconditionally, so omitting them docked the
+  // full fonts weight from every CV, English ones included.
+  'apple sd gothic neo', 'malgun gothic', 'noto sans cjk kr', 'noto sans kr',
+  'nanum gothic', 'pingfang tc', 'microsoft jhenghei', 'noto sans cjk tc',
+  'noto sans tc', 'source han sans tc',
 ]);
 
 // Generic CSS families — always valid, never "non-standard", so skip them.
@@ -90,6 +96,39 @@ function collapse(text) {
 /** Strip a fragment of inner tags to a plain-text label. */
 function stripInline(fragment) {
   return collapse(fragment.replace(/<[^>]+>/g, ' '));
+}
+
+/**
+ * Resolve one `font-family` declaration to the family names it actually asks
+ * for, lowercased.
+ *
+ * A `var(--x)` reference is not a font name, so it must not be reported as a
+ * "non-standard font" — but its fallback slot can hold one (`var(--x, Georgia)`),
+ * and that name has to survive or a genuinely risky font would hide behind a
+ * custom property. So the reference itself is dropped and everything it wrapped
+ * is kept. The custom property's *definition* (`--font-family: "Liberation
+ * Sans", …`) is scanned separately: the caller's pattern is unanchored, so it
+ * matches the declaration and the real faces are still checked.
+ * @param {string} declaration The text after `font-family:`, up to the `;`.
+ * @returns {string[]} Lowercased family names, empty entries removed.
+ */
+function parseFontFamilies(declaration) {
+  return declaration
+    // `var(--name` plus the comma before its fallback; the orphaned `)` that
+    // closed the reference is removed with the remaining punctuation below.
+    // The name is "any run that is not a separator", not `[\w-]+`: a custom
+    // property may be non-ASCII (`--字体`, `--police-caractères`) or carry a
+    // CSS escape, and an ASCII-only class stops at the first such character —
+    // leaving its tail behind to be reported as a font the CV never named.
+    //
+    // The separator set is CSS whitespace, spelled out rather than `\s`. The
+    // two disagree on U+00A0: JavaScript calls it whitespace, CSS calls it an
+    // ordinary identifier character (it is >= U+0080), so `\s` ended the name
+    // early on `var(--font family)` and reported `family` as a font.
+    .replace(/var\([ \t\n\f\r]*--(?:\\[\s\S]|[^ \t\n\f\r,()])*[ \t\n\f\r]*,?/gi, ' ')
+    .split(',')
+    .map(raw => raw.replace(/['"()]/g, '').trim().toLowerCase())
+    .filter(Boolean);
 }
 
 /**
@@ -350,7 +389,12 @@ function auditAts(html, opts = {}) {
 
   // 5. No CV text baked into images.
   let imageScore = WEIGHTS.images;
-  const imgs = [...html.matchAll(/<img\b[^>]*>/gi)].map(m => m[0]);
+  // Scanned on the content regions only: an `<img>` written inside a comment or
+  // a `<style>` body renders nothing. The shipped templates/cv-template.html
+  // documents its photo slot with the literal text "<img> is emitted" in a CSS
+  // comment, which the raw scan counted as a rendered image and docked every CV
+  // built from the base template 5 points for.
+  const imgs = [...stripNonContentRegions(html).matchAll(/<img\b[^>]*>/gi)].map(m => m[0]);
   const contentImgs = imgs.filter(tag => !/class\s*=\s*(?:"[^"]*\bcv-photo\b[^"]*"|'[^']*\bcv-photo\b[^']*')/i.test(tag));
   if (contentImgs.length > 0 && text.length < TEXT_LOW_WITH_IMG) {
     imageScore = 0;
@@ -366,9 +410,8 @@ function auditAts(html, opts = {}) {
   const families = new Set();
   for (const blob of styleBlobs) {
     for (const m of blob.matchAll(/font-family\s*:\s*([^;{}]+)/gi)) {
-      for (const raw of m[1].split(',')) {
-        const fam = raw.replace(/['"]/g, '').trim().toLowerCase();
-        if (fam && !GENERIC_FAMILIES.has(fam)) families.add(fam);
+      for (const fam of parseFontFamilies(m[1])) {
+        if (!GENERIC_FAMILIES.has(fam)) families.add(fam);
       }
     }
   }
@@ -529,9 +572,59 @@ function runSelfTest() {
   check('content image with low text is flagged', hasIssue(imgCv.issues, 'image'));
   check('content image with low text is critical', hasCritical(imgCv.issues));
 
+  // An <img> that only appears in a comment or a <style> body renders nothing,
+  // so it must not be counted. templates/cv-template.html documents its photo
+  // slot with the literal text "<img> is emitted" in a CSS comment.
+  const documentedImg = auditAts(buildCleanHtml({
+    extraBody: '<style>/* with no candidate.photo no <img> is emitted */</style>' +
+      '<!-- the photo slot emits an <img src="me.jpg"> when opted in -->',
+  }));
+  check('an <img> inside a comment or <style> is not counted', !hasIssue(documentedImg.issues, 'image'));
+
+  // …but a real <img> in the body still is — the strip above must not hide one.
+  const realImg = auditAts(buildCleanHtml({ extraBody: '<img src="chart.png">' }));
+  check('a rendered <img> is still counted', hasIssue(realImg.issues, 'non-photo image'));
+
   // Non-standard font ⇒ warning naming the font.
   const badFont = auditAts(buildCleanHtml({ font: "'Comic Sans MS', cursive" }));
   check('non-standard font is flagged', hasIssue(badFont.issues, 'comic sans ms'));
+
+  // A var() reference is not a font name and must not be reported as one.
+  const varFont = auditAts(buildCleanHtml({ font: 'var(--font-family), Arial, sans-serif' }));
+  check('a var() reference is not reported as a font', !hasIssue(varFont.issues, 'non-standard font'));
+
+  // …but a font named in var()'s fallback slot must not hide behind it.
+  const varFallback = auditAts(buildCleanHtml({ font: "var(--font-family, 'Comic Sans MS'), sans-serif" }));
+  check('a font in a var() fallback is still flagged', hasIssue(varFallback.issues, 'comic sans ms'));
+
+  // A custom property is not restricted to ASCII. An ASCII-only name class
+  // stops at the first such character and leaves the tail behind as a "font":
+  // `var(--police-caractères)` reported `ères`, and `var(--字体, Arial)`
+  // reported `字体` — names the CV never asked for.
+  const varNonAscii = auditAts(buildCleanHtml({ font: 'var(--字体, Arial), var(--police-caractères), sans-serif' }));
+  check('a non-ASCII custom-property name is consumed whole', !hasIssue(varNonAscii.issues, 'non-standard font'));
+
+  // An escaped character inside the name is part of the name, not a separator.
+  const varEscaped = auditAts(buildCleanHtml({ font: 'var(--a\\,b), Arial, sans-serif' }));
+  check('an escaped character in a custom-property name is consumed', !hasIssue(varEscaped.issues, 'non-standard font'));
+
+  // U+00A0 is whitespace to JavaScript but an ordinary identifier character to
+  // CSS, so a `\s`-based name class ended early here and reported `family`.
+  const varNbsp = auditAts(buildCleanHtml({ font: 'var(--font family), Arial, sans-serif' }));
+  check('U+00A0 inside a custom-property name is not a separator', !hasIssue(varNbsp.issues, 'non-standard font'));
+
+  // …while real CSS whitespace around the name is still skipped.
+  const varSpaced = auditAts(buildCleanHtml({ font: 'var( --font-family ), Arial, sans-serif' }));
+  check('CSS whitespace around a custom-property name is skipped', !hasIssue(varSpaced.issues, 'non-standard font'));
+
+  // The Korean and Traditional Chinese stacks the template declares
+  // unconditionally must not penalise a CV that never renders them.
+  const cjkFallbacks = auditAts(buildCleanHtml({
+    font: "var(--font-family), 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans CJK KR', " +
+      "'Noto Sans KR', 'Nanum Gothic', 'PingFang TC', 'Microsoft JhengHei', " +
+      "'Noto Sans CJK TC', 'Noto Sans TC', 'Source Han Sans TC', sans-serif",
+  }));
+  check('Korean/Traditional Chinese fallbacks are not flagged', !hasIssue(cjkFallbacks.issues, 'non-standard font'));
 
   // No email anywhere ⇒ critical.
   const noEmail = auditAts(buildCleanHtml({ email: 'San Francisco' }));

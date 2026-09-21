@@ -7,13 +7,15 @@
 </p>
 
 <p align="center">
-  <a href="https://x.com/santifer/status/2041403685696053741"><img src="docs/demo.gif" alt="career-ops pipeline: 516 listings scored, 219 marked do not apply, then one full evaluation" width="800"></a>
+  <a href="https://x.com/santifer/status/2041403685696053741"><img src="docs/demo.gif" alt="career-ops pipeline: listings scored, 219 marked do not apply, then one full evaluation" width="800"></a>
 </p>
 
-<p align="center"><sub>A snapshot mid-search: 516 listings in, 219 marked <em>do not apply</em>. Then one listing opened, evaluated end to end.</sub></p>
+<p align="center"><sub>A snapshot mid-search: the pipeline, then one listing opened and evaluated end to end.</sub></p>
 
-<p align="center"><strong>Final funnel: 740 listings evaluated · 68 applications sent · 12 interviews · 1 offer</strong></p>
-<p align="center"><sub>The number that matters is the cut, not the count.</sub></p>
+<p align="center"><strong>Out of 740 listings, 68 were worth applying to. 12 interviews. 1 offer.</strong></p>
+<p align="center"><sub>One search, the author's, 2026. The number that matters is the cut, not the count. Full numbers in the <a href="https://santifer.io/career-ops-system">case study</a>.</sub></p>
+
+<p align="center"><sub>Never submits, never sends, never phones home: <a href="#what-career-ops-will-not-do">what it will not do</a> · runs in the AI CLI you already use, <a href="docs/RUNNING_ON_A_BUDGET.md">free and local models included</a>.</sub></p>
 
 <details>
 <summary>Read this in 17 languages</summary>
@@ -44,6 +46,12 @@
   <a href="https://wired.com.gr/article/to-ai-ergaleio-pou-fernei-epanastasi-ston-tropo-pou-psachnoume-douleia/" rel="noopener noreferrer nofollow"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/press/wired-dark.svg"><img src="docs/press/wired.svg" alt="WIRED" height="32"></picture></a>
   &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
   <a href="https://www.businessinsider.com/how-i-built-tool-filter-job-listings-landed-head-ai-2026-4" rel="noopener noreferrer nofollow"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/press/business-insider-dark.svg"><img src="docs/press/business-insider.svg" alt="Business Insider" height="32"></picture></a>
+</p>
+
+<p align="center">
+  <a href="https://www.producthunt.com/products/santifer-io?utm_source=badge-featured&utm_medium=badge" target="_blank" rel="noopener noreferrer"><img src="docs/press/producthunt.svg" alt="career-ops on Claude | Product Hunt" style="width: 206px; height: 54px; vertical-align: middle;" width="206" height="54"/></a>
+  &nbsp;&nbsp;
+  <a href="https://trendshift.io/repositories/25195" target="_blank" rel="noopener noreferrer"><img src="https://trendshift.io/api/badge/repositories/25195" alt="santifer%2Fcareer-ops | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/></a>
 </p>
 
 <p align="center"><sub>Created and maintained by <a href="https://santifer.io">Santiago Fernández de Valderrama Aparicio</a> (<a href="https://github.com/santifer">@santifer</a>)</sub></p>

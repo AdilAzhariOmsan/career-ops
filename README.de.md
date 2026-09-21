@@ -1,28 +1,44 @@
 <p align="center"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/wordmark-dark.svg"><img src="docs/wordmark-light.svg" alt="career-ops" width="250" height="56"></picture></p>
 
+<p align="center">
+  <em>Ich habe monatelang Jobs auf die harte Tour gesucht. Also habe ich das System gebaut, das ich gern gehabt hätte.</em><br>
+  Unternehmen nutzen KI, um Bewerber:innen zu filtern. <strong>Ich habe Bewerber:innen KI gegeben, um Unternehmen zu <em>bewerten</em>.</strong><br>
+  Es bewertet, sortiert und entwirft. <strong>Es schickt nie etwas ab: das machst du.</strong> Open Source, lokal, deins.
+</p>
+
+<p align="center">
+  <a href="https://x.com/santifer/status/2041403685696053741"><img src="docs/demo.gif" alt="career-ops-Pipeline: bewertete Stellen, 219 als nicht bewerben markiert, dann eine vollständige Auswertung" width="800"></a>
+</p>
+
+<p align="center"><sub>Eine Momentaufnahme mitten in der Suche: die Pipeline, dann eine Stelle geöffnet und von Anfang bis Ende ausgewertet.</sub></p>
+
+<p align="center"><strong>Von 740 Stellen waren 68 eine Bewerbung wert. 12 Interviews. 1 Angebot.</strong></p>
+<p align="center"><sub>Eine Suche, die des Autors, 2026. Die Zahl, die zählt, ist die Auslese, nicht die Menge. Alle Zahlen in der <a href="https://santifer.io/career-ops-system">Fallstudie</a>.</sub></p>
+
+<p align="center"><sub>Schickt nie ab, sendet nie E-Mails, funkt nie nach Hause: <a href="#was-career-ops-nicht-tut">was es nicht tut</a> · läuft in der KI-CLI, die du schon benutzt, <a href="docs/RUNNING_ON_A_BUDGET.md">kostenlose und lokale Modelle inklusive</a>.</sub></p>
+
+<details>
+<summary>In 17 Sprachen lesen</summary>
 <div align="center">
 
 [English](README.md) | [Español](README.es.md) | [Deutsch](README.de.md) | [Français](README.fr.md) | [Português (Brasil)](README.pt-BR.md) | [한국어](README.ko-KR.md) | [日本語](README.ja.md) | [简体中文](README.cn.md) | [繁體中文](README.zh-TW.md) | [Українська](README.ua.md) | [Русский](README.ru.md) | [Polski](README.pl.md) | [Dansk](README.da.md) | [العربية](README.ar.md) | [हिन्दी](README.hi.md)
 
 </div>
+</details>
+
+<hr>
 
 <p align="center">
-  <a href="https://x.com/santifer"><img src="docs/hero-banner.jpg" alt="career-ops Multi-Agent-System für die Jobsuche" width="800"></a>
+  <a href="HIRED.md"><img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Fsantifer%2Fcareer-ops%2Fmain%2Fdocs%2Fhired-count.json&query=%24.count&label=%F0%9F%8E%89%20HIRED%20WITH%20CAREER-OPS&suffix=%20verified&color=2ea44f&style=for-the-badge&labelColor=2b3137" alt="Mit career-ops eingestellt: verifizierte Anzahl"></a>
 </p>
 
-<p align="center">
-  <em>Ich habe monatelang Jobs auf die harte Tour gesucht. Also habe ich das System gebaut, das ich gern gehabt hätte.</em><br>
-  Unternehmen nutzen KI, um Bewerber:innen zu filtern. <strong>Ich habe Bewerber:innen KI gegeben, um Unternehmen zu <em>bewerten</em>.</strong><br>
-  <em>Jetzt ist es Open Source.</em>
-</p>
+<p align="center"><sub>Job gelandet? <a href="https://github.com/career-ops-hq/career-ops/issues/new?template=i-got-hired.yml">Teile es →</a> · deine Karte zeigt jemandem mitten in der Suche, dass es einen Ausweg gibt.</sub></p>
 
 <p align="center">
-  <a href="https://trendshift.io/repositories/25195" target="_blank" rel="noopener noreferrer"><img src="https://trendshift.io/api/badge/repositories/25195" alt="santifer%2Fcareer-ops | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/></a>
+  <a href="HIRED.md"><img src="docs/hired-wall.svg" alt="Die drei neuesten Einstellungsgeschichten" width="800"></a>
 </p>
 
-<p align="center">
-  <a href="https://www.producthunt.com/products/santifer-io?utm_source=badge-featured&utm_medium=badge" target="_blank" rel="noopener noreferrer"><img src="docs/press/producthunt.svg" alt="career-ops auf Claude | Product Hunt" style="width: 206px; height: 54px; vertical-align: middle;" width="206" height="54"/></a>
-</p>
+<p align="center"><sub>Jede Zahl ist eine öffentliche Geschichte, die du <a href="HIRED.md">prüfen kannst →</a> · jede davon hat dort angefangen, wo du jetzt bist.</sub></p>
 
 <p align="center"><sub>BEKANNT AUS</sub></p>
 
@@ -32,55 +48,13 @@
   <a href="https://www.businessinsider.com/how-i-built-tool-filter-job-listings-landed-head-ai-2026-4" rel="noopener noreferrer nofollow"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/press/business-insider-dark.svg"><img src="docs/press/business-insider.svg" alt="Business Insider" height="32"></picture></a>
 </p>
 
----
-
 <p align="center">
-  <img src="docs/demo.gif" alt="career-ops Demo" width="800">
+  <a href="https://www.producthunt.com/products/santifer-io?utm_source=badge-featured&utm_medium=badge" target="_blank" rel="noopener noreferrer"><img src="docs/press/producthunt.svg" alt="career-ops auf Claude | Product Hunt" style="width: 206px; height: 54px; vertical-align: middle;" width="206" height="54"/></a>
+  &nbsp;&nbsp;
+  <a href="https://trendshift.io/repositories/25195" target="_blank" rel="noopener noreferrer"><img src="https://trendshift.io/api/badge/repositories/25195" alt="santifer%2Fcareer-ops | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/></a>
 </p>
-
-<p align="center"><strong>740+ Stellenanzeigen bewertet · 100+ personalisierte Lebensläufe · 1 Traumrolle bekommen</strong></p>
 
 <p align="center"><sub>Erstellt und gepflegt von <a href="https://santifer.io">Santiago Fernández de Valderrama Aparicio</a> (<a href="https://github.com/santifer">@santifer</a>)</sub></p>
-
-<p align="center">
-  <a href="https://warpchart.dev/hq">
-    <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="https://warpchart.dev/api/chart?theme=dark&v=3">
-      <img alt="Live-Sterne-Telemetrie von career-ops-hq/career-ops" src="https://warpchart.dev/api/chart?theme=light&v=3" loading="lazy">
-    </picture>
-  </a>
-</p>
-
-<p align="center">
-  <a href="https://discord.gg/8pRpHETxa4"><img src="https://img.shields.io/badge/Community_beitreten-Discord-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Discord"></a>
-</p>
-
-<p align="center">
-  <a href="https://github.com/career-ops-hq/career-ops/releases/latest"><img src="https://img.shields.io/npm/v/%40santifer%2Fcareer-ops?style=for-the-badge&labelColor=2b3137&color=2ea44f&label=release" alt="Neueste Version"></a>
-</p>
-
-<p align="center">
-  <a href="https://claude.com/claude-code"><img src="https://img.shields.io/badge/Built_with-Claude_Code-000?style=for-the-badge&logo=anthropic&logoColor=white" alt="Built with Claude Code"></a>
-</p>
-
-<p align="center">
-  <sub>Läuft auch mit jeder CLI, die den agent-skill-Standard unterstützt</sub><br>
-  <img src="https://img.shields.io/badge/Claude_Code-000?style=flat&logo=anthropic&logoColor=white" alt="Claude Code">
-  <img src="https://img.shields.io/badge/OpenCode-111827?style=flat&logo=terminal&logoColor=white" alt="OpenCode">
-  <img src="https://img.shields.io/badge/Antigravity_CLI-4285F4?style=flat&logo=google&logoColor=white" alt="Antigravity CLI">
-  <img src="https://img.shields.io/badge/Codex-412991?style=flat&logo=openai&logoColor=white" alt="Codex">
-  <img src="https://img.shields.io/badge/Qwen-615CED?style=flat" alt="Qwen">
-  <img src="https://img.shields.io/badge/Kimi-FF4B4B?style=flat" alt="Kimi">
-  <img src="https://img.shields.io/badge/GitHub_Copilot-000?style=flat&logo=githubcopilot&logoColor=white" alt="GitHub Copilot">
-  <img src="https://img.shields.io/badge/Grok_Build_CLI-000?style=flat&logo=x&logoColor=white" alt="Grok Build CLI">
-  <br>
-  <img src="https://img.shields.io/badge/Node.js-339933?style=flat&logo=node.js&logoColor=white" alt="Node.js">
-  <img src="https://img.shields.io/badge/Go-00ADD8?style=flat&logo=go&logoColor=white" alt="Go">
-  <img src="https://img.shields.io/badge/Playwright-2EAD33?style=flat&logo=playwright&logoColor=white" alt="Playwright">
-  <img src="https://img.shields.io/badge/Bubble_Tea-FF75B5?style=flat&logo=go&logoColor=white" alt="Bubble Tea">
-  <img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="MIT">
-  <a href="TRADEMARK.md"><img src="https://img.shields.io/badge/Trademark-Policy-blue.svg" alt="Trademark Policy"></a>
-</p>
 
 ## Was ist das?
 
@@ -98,7 +72,16 @@ career-ops ist agentisch: Die KI-Coding-CLI deiner Wahl navigiert mit Playwright
 
 > **Hinweis: Die ersten Bewertungen werden nicht perfekt sein.** Das System kennt dich noch nicht. Gib ihm Kontext: deinen Lebenslauf, deinen Werdegang, Proof Points, Präferenzen, Stärken und No-Gos. Je besser du es einarbeitest, desto besser wird es. Denk daran wie an das Onboarding eines neuen Recruiters: In der ersten Woche muss er dich kennenlernen, danach wird er wertvoll.
 
-Gebaut von jemandem, der damit 740+ Stellenanzeigen bewertet, 100+ personalisierte Lebensläufe erstellt und eine Rolle als Head of Applied AI bekommen hat. [Lies die vollständige Case Study](https://santifer.io/career-ops-system).
+Gebaut von jemandem, der damit 740 Stellenangebote ausgewertet, sich auf 68 beworben und eine Stelle als Head of Applied AI bekommen hat. [Die ganze Fallstudie lesen](https://santifer.io/career-ops-system).
+
+## Was career-ops nicht tut
+
+- **Eine Bewerbung abschicken.** Es bereitet die Antworten vor; du öffnest das Formular und klickst auf Absenden. Das Skript sendet nie einen POST (`prepare-application.mjs`).
+- **Eine E-Mail senden.** Nur Entwürfe. Nirgendwo in diesem Code gibt es einen Mailversand.
+- **Nach Hause funken.** Keine Telemetrie, kein Backend von uns. Dein Lebenslauf geht von deinem Rechner zum KI-Anbieter deiner Wahl, und nirgendwo sonst. Das einzige öffentliche Register ist dieses Repository: `HIRED.md` und seine Issues.
+- **Dich zu Bewerbungen unter 4,0/5 drängen.** Es rät dir davon ab. Du kannst dich darüber hinwegsetzen, und es sagt es dir.
+
+Es formuliert deinen Lebenslauf um; es darf ihn nie erfinden. Heute steht diese Regel in den Prompts, noch nicht in einer erzwingenden Prüfung. Lies jeden Lebenslauf, bevor du ihn abschickst. Details in den [FAQ](#faq).
 
 ## Features
 
@@ -281,6 +264,9 @@ career-ops/
 
 ## FAQ
 
+**Kann der zugeschnittene Lebenslauf etwas erfinden?**
+Er darf es nicht, und die Prompts sagen das: umformulieren, nie erfinden. Diese Regel wird noch nicht durch eine Prüfung im Code erzwungen. Zwei offene Issues verfolgen das: [#2677](https://github.com/career-ops-hq/career-ops/issues/2677) (Jobtitel müssen zu cv.md passen) und [#1411](https://github.com/career-ops-hq/career-ops/issues/1411) (Treueprüfung, die bei Verstoß blockiert). Bis sie gemergt sind: lies jeden Lebenslauf, bevor du ihn abschickst. Der [Haftungsausschluss](LEGAL_DISCLAIMER.md) sagt dasselbe mit mehr Worten.
+
 **Was ist career-ops?**
 career-ops ist ein quelloffenes, CLI-unabhängiges Kommandozentrum für die Jobsuche. Es macht aus jeder KI-Coding-CLI eine Pipeline, die Stellenangebote gegen deinen Lebenslauf bewertet, ATS-optimierte PDFs erzeugt, die richtige Kontaktperson findet und alles an einem Ort trackt — während du die finale Entscheidung behältst. Es ist die erste Referenzimplementierung des CareerOps Manifesto. Mehr unter [career-ops.org](https://career-ops.org).
 
@@ -329,6 +315,19 @@ Mit career-ops eingestellt worden? [Teile deine Geschichte!](https://github.com/
 ## Lizenz & Trademark
 
 Der Code steht unter der [MIT](LICENSE)-Lizenz. Der Name und die Marke "career-ops" unterliegen der [Trademark Policy](TRADEMARK.md): offen für Community-Nutzung, reserviert für kommerzielle Produktnamen und Endorsements.
+
+## Auszeichnungen
+
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="https://warpchart.dev/api/chart?theme=dark&v=3">
+      <img alt="Live-Sterne-Telemetrie von career-ops-hq/career-ops" src="https://warpchart.dev/api/chart?theme=light&v=3" loading="lazy">
+    </picture>
+  </a>
+</p>
+
+<p align="center">
+  <a href="https://discord.gg/8pRpHETxa4"><img src="https://img.shields.io/badge/Community_beitreten-Discord-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Discord"></a>
+</p>
 
 ## Kontakt
 

@@ -71,11 +71,11 @@ Nobody has to do this alone. People in the same search, comparing notes and fixi
 
 <p align="center"><a href="https://discord.gg/8pRpHETxa4"><img src="https://img.shields.io/badge/Join_the_community-Discord-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Discord"></a></p>
 
-## Build your own
+## The manifesto
 
-The name of the practice does not belong to one repository.
+The silence after you hit send is not about you. Enough people saw the same thing to write the practice down, in six lines:
 
-> CareerOps, the name of the practice, belongs to everyone who practices it. career-ops, the project where it was born, remains its first reference implementation, nothing more. Build your own. Implementations welcome.
+> Apply better to fewer. Signal over volume. Evidence over keywords. A human decides. Local-first. Dignity on both sides of the table.
 
 <p align="center"><a href="https://career-ops.org/manifesto?utm_source=readme"><img src="https://img.shields.io/badge/dynamic/regex?url=https%3A%2F%2Fraw.githubusercontent.com%2Fcareer-ops-hq%2Fcareer-ops%2Fmain%2FSIGNATURES.md&search=n%3A(%5Cd%2B)%5Cs*%24&replace=%241%20signatories&label=THE%20CAREEROPS%20MANIFESTO&color=DD7627&style=for-the-badge&labelColor=2b3137" alt="The CareerOps manifesto: live count of signatories"></a></p>
 
@@ -91,7 +91,7 @@ The name of the practice does not belong to one repository.
 
 [Read the manifesto. Sign it](https://career-ops.org/manifesto?utm_source=readme) if this is how you want to search. Your signature is a commit; if you have never made one to an open source project, this is a good first.
 
-If you are in a search, you already understand the bug. [A small change](CONTRIBUTING.md) is welcome. The point is the practice, not a line on your CV.
+CareerOps, the practice, belongs to everyone who practices it. career-ops, this repository, is only its first implementation. Build your own. And if you are in a search, you already understand the bug: [a small change](CONTRIBUTING.md) is welcome.
 
 ## What this does for you
 

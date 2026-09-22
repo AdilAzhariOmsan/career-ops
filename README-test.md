@@ -1,10 +1,18 @@
 <p align="center"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/wordmark-dark.svg"><img src="docs/wordmark-light.svg" alt="career-ops" width="250" height="56"></picture></p>
 
-<p align="center">
+<table align="center">
+<tr>
+<td width="64" valign="top" align="center">
+  <img src="docs/avatar-santiago-pixel.png" width="48" height="48" alt="Santiago">
+  <br><sub>Santiago</sub>
+</td>
+<td valign="top">
   <strong>I was the first user.</strong><br>
   Months of sending CVs into silence. So I built the filter I needed.<br>
   <strong>740 listings. 68 worth sending. 12 interviews. 1 offer.</strong> Then I open-sourced it.
-</p>
+</td>
+</tr>
+</table>
 
 <p align="center">
   Companies use AI to filter candidates. <strong>I gave candidates AI to <em>choose</em> companies.</strong><br>

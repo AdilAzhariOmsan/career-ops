@@ -107,7 +107,7 @@ On first launch it asks for all that in chat. Nothing to configure by hand.
 
 ## What career-ops will not do
 
-- **Submit an application.** It prepares the answers; you open the form and click Submit. The script never POSTs (`prepare-application.mjs`).
+- **Auto-submit an application.** It drafts the answer to every field; you review and click Submit. The script never POSTs (`prepare-application.mjs`).
 - **Send an email.** Drafts only. There is no mail transport anywhere in this codebase.
 - **Phone home.** No telemetry, no backend of ours. Your CV goes from your machine to the AI provider you chose, and nowhere else. The only public ledger is this repo: `HIRED.md` and its issues.
 - **Push you to apply below 4.0/5.** It will tell you not to. You can override it, and it will say so.

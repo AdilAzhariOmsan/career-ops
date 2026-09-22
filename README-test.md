@@ -1,13 +1,17 @@
 <p align="center"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/wordmark-dark.svg"><img src="docs/wordmark-light.svg" alt="career-ops" width="250" height="56"></picture></p>
 
+<table align="center">
+<tr>
+<td>
 <a href="https://github.com/santifer"><img src="docs/avatar-santifer.png" width="112" height="96" align="left" alt="santifer"></a>
-
 <strong>Months of sending CVs into silence.</strong> So I built the filter I needed.<br>
 <strong>740 listings. 68 worth sending. 12 interviews. 1 offer.</strong><br>
 I was its first user. Then I open-sourced it.
+</td>
+</tr>
+</table>
 
-<br clear="all">
-
+<div align="center">
 <details>
 <summary>🌍 Read this in 17 languages</summary>
 <div align="center">
@@ -16,6 +20,7 @@ I was its first user. Then I open-sourced it.
 
 </div>
 </details>
+</div>
 
 <p align="center">
   Companies use AI to filter candidates. <strong>I gave candidates AI to <em>choose</em> companies.</strong><br>

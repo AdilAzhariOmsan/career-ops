@@ -68,7 +68,7 @@ npx @santifer/career-ops init
 <p align="center"><sub>Open source. Local. In the AI CLI you already use. <a href="docs/RUNNING_ON_A_BUDGET.md">Free and local models included.</a></sub></p>
 
 
-## Not a solo search
+## You don't have to search alone
 
 The silence after you hit send is not about you. Enough people saw the same thing to write the practice down, in six lines:
 

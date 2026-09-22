@@ -30,7 +30,6 @@ I was its first user. Then I open-sourced it.
 <p align="center">
   <a href="https://x.com/santifer/status/2041403685696053741"><img src="docs/demo.gif" alt="The author's own search: listings marked do not apply, in red, before a CV went out" width="800"></a>
 </p>
-
 <p align="center"><sub>That red tab is the product. <em>Do not apply.</em> <a href="https://santifer.io/career-ops-system">The full story →</a></sub></p>
 
 <br>

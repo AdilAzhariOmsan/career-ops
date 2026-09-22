@@ -1,18 +1,21 @@
 <p align="center"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/wordmark-dark.svg"><img src="docs/wordmark-light.svg" alt="career-ops" width="250" height="56"></picture></p>
 
-<table align="center">
-<tr>
-<td width="64" valign="top" align="center">
-  <img src="docs/avatar-santiago-pixel.png" width="48" height="48" alt="Santiago">
-  <br><sub>Santiago</sub>
-</td>
-<td valign="top">
-  <strong>I was the first user.</strong><br>
-  Months of sending CVs into silence. So I built the filter I needed.<br>
-  <strong>740 listings. 68 worth sending. 12 interviews. 1 offer.</strong> Then I open-sourced it.
-</td>
-</tr>
-</table>
+<a href="https://github.com/santifer"><img src="docs/avatar-santifer.png" width="112" height="96" align="left" alt="santifer"></a>
+
+<strong>Months of sending CVs into silence.</strong> So I built the filter I needed.<br>
+<strong>740 listings. 68 worth sending. 12 interviews. 1 offer.</strong><br>
+I was its first user. Then I open-sourced it.
+
+<br clear="all">
+
+<details>
+<summary>🌍 Read this in 17 languages</summary>
+<div align="center">
+
+[English](README.md) | [Español](README.es.md) | [Deutsch](README.de.md) | [Français](README.fr.md) | [Português (Brasil)](README.pt-BR.md) | [한국어](README.ko-KR.md) | [日本語](README.ja.md) | [简体中文](README.cn.md) | [繁體中文](README.zh-TW.md) | [Українська](README.ua.md) | [Русский](README.ru.md) | [Polski](README.pl.md) | [Dansk](README.da.md) | [தமிழ்](README.ta.md) | [العربية](README.ar.md) | [हिन्दी](README.hi.md) | [Türkçe](README.tr.md)
+
+</div>
+</details>
 
 <p align="center">
   Companies use AI to filter candidates. <strong>I gave candidates AI to <em>choose</em> companies.</strong><br>
@@ -31,20 +34,11 @@ npx @santifer/career-ops init
 
 <p align="center"><sub>Open source. Local. In the AI CLI you already use. <a href="docs/RUNNING_ON_A_BUDGET.md">Free and local models included.</a></sub></p>
 
-<details>
-<summary>Read this in 17 languages</summary>
-<div align="center">
-
-[English](README.md) | [Español](README.es.md) | [Deutsch](README.de.md) | [Français](README.fr.md) | [Português (Brasil)](README.pt-BR.md) | [한국어](README.ko-KR.md) | [日本語](README.ja.md) | [简体中文](README.cn.md) | [繁體中文](README.zh-TW.md) | [Українська](README.ua.md) | [Русский](README.ru.md) | [Polski](README.pl.md) | [Dansk](README.da.md) | [தமிழ்](README.ta.md) | [العربية](README.ar.md) | [हिन्दी](README.hi.md) | [Türkçe](README.tr.md)
-
-</div>
-</details>
-
 <hr>
 
 ## After the first user
 
-I was user zero. The people who came after me wrote down how they got hired. Every card is a public issue you can open.
+I was its first user. The people who came after me wrote down how they got hired. Every card is a public issue you can open.
 
 <p align="center">
   <a href="HIRED.md"><img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Fsantifer%2Fcareer-ops%2Fmain%2Fdocs%2Fhired-count.json&query=%24.count&label=%F0%9F%8E%89%20HIRED%20WITH%20CAREER-OPS&suffix=%20verified&color=2ea44f&style=for-the-badge&labelColor=2b3137" alt="Hired with career-ops: verified count"></a>

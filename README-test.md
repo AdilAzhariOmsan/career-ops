@@ -67,11 +67,8 @@ npx @santifer/career-ops init
 
 <p align="center"><sub>Open source. Local. In the AI CLI you already use. <a href="docs/RUNNING_ON_A_BUDGET.md">Free and local models included.</a></sub></p>
 
-Nobody has to do this alone. People in the same search, comparing notes and fixing each other's setups. A room, not a club.
 
-<p align="center"><a href="https://discord.gg/8pRpHETxa4"><img src="https://img.shields.io/badge/Join_the_community-Discord-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Discord"></a></p>
-
-## The manifesto
+## Not a solo search
 
 The silence after you hit send is not about you. Enough people saw the same thing to write the practice down, in six lines:
 
@@ -85,13 +82,15 @@ The silence after you hit send is not about you. Enough people saw the same thin
   <a href="https://career-ops.org/manifesto?utm_source=readme"><img src="docs/manifesto-wall.svg" alt="Three signatures of the CareerOps manifesto, in their own words" width="800"></a>
 </p>
 
-<p align="center"><sub>Every signature is a commit you can audit. <a href="https://career-ops.org/manifesto?utm_source=readme">All of them →</a></sub></p>
+<p align="center"><sub>Every signature is a commit you can audit. <a href="https://career-ops.org/manifesto?utm_source=readme">Read them all, or add yours →</a></sub></p>
 
 <br>
 
-[Read the manifesto. Sign it](https://career-ops.org/manifesto?utm_source=readme) if this is how you want to search. Your signature is a commit; if you have never made one to an open source project, this is a good first.
+People in the same search are in the room, comparing notes and fixing each other's setups. A room, not a club.
 
-CareerOps, the practice, belongs to everyone who practices it. career-ops, this repository, is only its first implementation. Build your own. And if you are in a search, you already understand the bug: [a small change](CONTRIBUTING.md) is welcome.
+<p align="center"><a href="https://discord.gg/8pRpHETxa4"><img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fdiscord.com%2Fapi%2Fv10%2Finvites%2F8pRpHETxa4%3Fwith_counts%3Dtrue&query=%24.approximate_member_count&label=Discord&suffix=%20members&color=5865F2&style=for-the-badge&labelColor=2b3137&logo=discord&logoColor=white" alt="Discord: live member count of the career-ops server"></a></p>
+
+You already understand the bug. [A small change](CONTRIBUTING.md) is welcome; so is your own implementation.
 
 ## What this does for you
 

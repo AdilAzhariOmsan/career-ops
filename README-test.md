@@ -2,8 +2,8 @@
 
 <table align="center">
 <tr>
-<td>
-<a href="https://github.com/santifer"><img src="docs/avatar-santifer.png" width="112" height="96" align="left" alt="santifer"></a>
+<td align="center" valign="middle"><a href="https://github.com/santifer"><img src="docs/avatar-santifer.png" width="72" height="94" alt="santifer"></a></td>
+<td valign="middle">
 <strong>Months of sending CVs into silence.</strong> So I built the filter I needed.<br>
 <strong>740 listings. 68 worth sending. 12 interviews. 1 offer.</strong><br>
 I was its first user. Then I open-sourced it.
@@ -33,29 +33,28 @@ I was its first user. Then I open-sourced it.
 
 <p align="center"><sub>That red tab is the product. <em>Do not apply.</em> <a href="https://santifer.io/career-ops-system">The full story →</a></sub></p>
 
+## After the first user
+
+The people who came after me wrote down how they got hired.
+
+<p align="center">
+  <a href="HIRED.md"><img src="docs/hired-wall.svg" alt="Hired stories you can open and read" width="800"></a>
+</p>
+
+<p align="center"><a href="HIRED.md"><img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Fsantifer%2Fcareer-ops%2Fmain%2Fdocs%2Fhired-count.json&query=%24.count&label=%F0%9F%8E%89%20HIRED%20WITH%20CAREER-OPS&suffix=%20verified&color=2ea44f&style=for-the-badge&labelColor=2b3137" alt="Hired with career-ops: verified count"></a></p>
+<p align="center"><sub>Every card is a public issue you can open. Landed yours? <a href="https://github.com/career-ops-hq/career-ops/issues/new?template=i-got-hired.yml">Leave your card →</a></sub></p>
+
+> "It actually help me land a great job and I'm here trying to help others achieve the same." <sub>[@FReptar0](https://github.com/career-ops-hq/career-ops/discussions/1878)</sub>
+
+**Your turn.**
+
 ```bash
 npx @santifer/career-ops init
 ```
 
 <p align="center"><sub>Open source. Local. In the AI CLI you already use. <a href="docs/RUNNING_ON_A_BUDGET.md">Free and local models included.</a></sub></p>
 
-<hr>
-
-## After the first user
-
-I was its first user. The people who came after me wrote down how they got hired. Every card is a public issue you can open.
-
-<p align="center">
-  <a href="HIRED.md"><img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Fsantifer%2Fcareer-ops%2Fmain%2Fdocs%2Fhired-count.json&query=%24.count&label=%F0%9F%8E%89%20HIRED%20WITH%20CAREER-OPS&suffix=%20verified&color=2ea44f&style=for-the-badge&labelColor=2b3137" alt="Hired with career-ops: verified count"></a>
-</p>
-
-<p align="center">
-  <a href="HIRED.md"><img src="docs/hired-wall.svg" alt="Hired stories you can open and read" width="800"></a>
-</p>
-
-> "It actually help me land a great job and I'm here trying to help others achieve the same." <sub>[@FReptar0](https://github.com/career-ops-hq/career-ops/discussions/1878)</sub>
-
-<p align="center"><sub>Landed yours? <a href="https://github.com/career-ops-hq/career-ops/issues/new?template=i-got-hired.yml">Leave your card →</a> The next person, mid-search, needs to see that the way out exists.</sub></p>
+## Build your own
 
 The name of the practice does not belong to one repository.
 

@@ -86,15 +86,11 @@ The silence after you hit send is not about you. Enough people saw the same thin
 
 <br>
 
-Hiring will not fix itself. The people going through it can, and they are already in the room, comparing notes and fixing each other's setups. [This is where the fix gets written](CONTRIBUTING.md): a line of docs, a portal that was missing, a repair for a setup like yours, or your own implementation. A room, not a club. **Let's build together.**
+Hiring will not fix itself. The people going through it can, and they are already in the room, comparing notes and fixing each other's setups. [This is where the fix gets written](CONTRIBUTING.md). A room, not a club. **Let's build together.**
 
-<p align="center">
-  <a href="https://discord.gg/8pRpHETxa4"><img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fdiscord.com%2Fapi%2Fv10%2Finvites%2F8pRpHETxa4%3Fwith_counts%3Dtrue&query=%24.approximate_member_count&label=Discord&suffix=%20members&color=5865F2&style=for-the-badge&labelColor=2b3137&logo=discord&logoColor=white" alt="Discord: live member count of the career-ops server"></a>
-  &nbsp;&nbsp;
-  <a href="https://github.com/career-ops-hq/career-ops/graphs/contributors"><img src="https://img.shields.io/github/contributors/career-ops-hq/career-ops?style=for-the-badge&label=Contributors&labelColor=2b3137&color=8957e5&logo=github&logoColor=white" alt="Contributors: live count from GitHub"></a>
-</p>
+<p align="center"><a href="https://discord.gg/8pRpHETxa4"><img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fdiscord.com%2Fapi%2Fv10%2Finvites%2F8pRpHETxa4%3Fwith_counts%3Dtrue&query=%24.approximate_member_count&label=Discord&suffix=%20members&color=5865F2&style=for-the-badge&labelColor=2b3137&logo=discord&logoColor=white" alt="Discord: live member count of the career-ops server"></a></p>
 
-## What this does for you
+## What career-ops does for you
 
 Paste a job. It tells you whether that night is worth it.
 

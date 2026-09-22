@@ -6,7 +6,7 @@
 <td valign="middle">
 <strong>Months of sending CVs into silence.</strong> So I built the filter I needed.<br>
 <strong>740 listings. 68 worth sending. 12 interviews. 1 offer.</strong><br>
-I was its first user. Then I open-sourced it.
+I was its first user. <strong>I got the job.</strong> Then I open-sourced it.
 </td>
 </tr>
 </table>
@@ -30,6 +30,7 @@ I was its first user. Then I open-sourced it.
 <p align="center">
   <a href="https://x.com/santifer/status/2041403685696053741"><img src="docs/demo.gif" alt="The author's own search: listings marked do not apply, in red, before a CV went out" width="800"></a>
 </p>
+
 <p align="center"><sub>That red tab is the product. <em>Do not apply.</em> <a href="https://santifer.io/career-ops-system">The full story →</a></sub></p>
 
 <br>
@@ -75,6 +76,18 @@ Nobody has to do this alone. People in the same search, comparing notes and fixi
 The name of the practice does not belong to one repository.
 
 > CareerOps, the name of the practice, belongs to everyone who practices it. career-ops, the project where it was born, remains its first reference implementation, nothing more. Build your own. Implementations welcome.
+
+<p align="center"><a href="https://career-ops.org/manifesto?utm_source=readme"><img src="https://img.shields.io/badge/dynamic/regex?url=https%3A%2F%2Fraw.githubusercontent.com%2Fcareer-ops-hq%2Fcareer-ops%2Fmain%2FSIGNATURES.md&search=n%3A(%5Cd%2B)%5Cs*%24&replace=%241%20signatories&label=THE%20CAREEROPS%20MANIFESTO&color=DD7627&style=for-the-badge&labelColor=2b3137" alt="The CareerOps manifesto: live count of signatories"></a></p>
+
+<p align="center">A few of them, in their own words.</p>
+
+<p align="center">
+  <a href="https://career-ops.org/manifesto?utm_source=readme"><img src="docs/manifesto-wall.svg" alt="Three signatures of the CareerOps manifesto, in their own words" width="800"></a>
+</p>
+
+<p align="center"><sub>Every signature is a commit you can audit. <a href="https://career-ops.org/manifesto?utm_source=readme">All of them →</a></sub></p>
+
+<br>
 
 [Read the manifesto. Sign it](https://career-ops.org/manifesto?utm_source=readme) if this is how you want to search. Your signature is a commit; if you have never made one to an open source project, this is a good first.
 

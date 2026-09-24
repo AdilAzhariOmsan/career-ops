@@ -217,7 +217,8 @@ Levels are additive — they are executed in order, and results are merged and d
 
 6b. **Filter by Location (Optional)** using `location_filter` from `portals.yml`:
    - If the `location_filter` block is absent, all locations pass (default behavior).
-   - Empty location on a posting → passes (do not penalize missing data).
+   - Empty location on a posting → passes by default (do not penalize missing data) — **unless** `strict: true` is set AND a restricting tier (`allow`, `block`, or `block_hard`) is configured, in which case an empty location is rejected instead. `strict` exists for a location-restricted sweep over a provider that never returns a location (iCIMS is the common case): without it, every out-of-region posting from that provider silently passes because the restricting tier is never consulted. `strict: true` alone, with no restricting tier, restricts nothing.
+   - Any keyword from `block_hard` (like `block`, but `always_allow` cannot override it) matches → reject.
    - Any keyword from `block` present → reject (precedes allow).
    - Empty `allow` → passes (already cleared block).
    - Non-empty `allow` → must match at least one keyword.
@@ -260,11 +261,7 @@ Levels are additive — they are executed in order, and results are merged and d
 
 8. **For each new verified offer that passes filters**:
    a. Add to the `pipeline.md` "Pending" section: `- [ ] {url} | {company} | {title}`
-   b. Record a row in `scan-history.tsv` with status `added`, in the full
-      12-column format documented under [Scan History](#scan-history) below —
-      the same shape `formatScanHistoryRow` / `appendToScanHistory` in `scan.mjs`
-      emit. Leave a trailing column empty when you have no value for it; never
-      write a short row.
+   b. Record in `scan-history.tsv` with status `added`. Write the row with `formatScanHistoryRow` / `appendToScanHistory` from `scan.mjs` rather than composing the tab-separated line by hand — the column set has grown and will grow again, and a hand-written row is silently short.
 
 9. **Offers filtered by title**: record in `scan-history.tsv` with status `skipped_title`.
 10. **Duplicate offers**: record with status `skipped_dup`.
@@ -290,10 +287,7 @@ If a non-publicly accessible URL is found:
 
 ## Scan History
 
-`data/scan-history.tsv` tracks ALL seen URLs. Each row has twelve tab-separated
-columns, in writer order (`formatScanHistoryRow` in `scan.mjs`). Columns 8-12 are
-append-only additions; older rows may carry fewer columns and every reader indexes
-by position and tolerates their absence.
+`data/scan-history.tsv` tracks ALL seen URLs. Each row has twelve tab-separated columns, in the order `formatScanHistoryRow` emits them (`scan.mjs`):
 
 | # | Column | Example | Notes |
 |---|--------|---------|-------|
@@ -301,14 +295,16 @@ by position and tolerates their absence.
 | 2 | `first_seen` | `2026-02-10` | ISO date the URL was first encountered |
 | 3 | `portal` | `Ashby — AI PM` | Query name from `portals.yml` |
 | 4 | `title` | `PM AI` | Job title as returned by the ATS |
-| 5 | `company` | `Acme` | Company name as returned by the ATS |
-| 6 | `status` | `added` | `added`, `skipped_dup`, `skipped_title`, `skipped_expired`, `skipped_error` |
+| 5 | `company` | `Acme` | Company name |
+| 6 | `status` | `added` | `added`, `skipped_dup`, `skipped_title`, `skipped_expired` |
 | 7 | `location` | `Remote — Europe` | Location string (may be empty); persisted for later auditing |
 | 8 | `fingerprint` | `a3f1c8d2e4b70592` | 64-bit SimHash of the JD text (16 hex chars); empty when no usable body was available |
 | 9 | `posted_at` | `2026-02-08` | ISO date the role was originally posted (as reported by the ATS); empty when not available |
-| 10 | `trust_score` | `72` | Posting-legitimacy score (#1743); empty unless the scanner flagged the posting (score < 100) |
-| 11 | `trust_flags` | `no_company_site,reposted` | Comma-joined legitimacy flags; empty when `trust_score` is empty |
-| 12 | `normalized_company` | `acme` | Canonical company key (#2093) — lowercased, punctuation/whitespace folded, legal-entity suffixes stripped — so repost/name matching never has to re-derive it |
+| 10 | `trust_score` | `70` | Trust/legitimacy score, written only when the scanner flagged the posting (score < 100); empty otherwise |
+| 11 | `trust_flags` | `no_company_site,vague_jd` | Comma-joined trust flags, written under the same condition as col 10; empty otherwise |
+| 12 | `normalized_company` | `acme` | Canonical company key (`normalizeCompanyName`) so `Acme Inc.`, `Acme, Inc.` and `ACME  Inc` all match; col 5 stays faithful to what the provider returned |
+
+Columns are append-only: readers index by position, so new columns arrive at the end and older files keep their shorter rows. Never renumber or reorder. The header is written only when the file is created, so an existing file may still carry a shorter header than the rows being appended to it — that is expected, not corruption.
 
 ```tsv
 url	first_seen	portal	title	company	status	location	fingerprint	posted_at	trust_score	trust_flags	normalized_company
@@ -395,7 +391,7 @@ weekly, `--since 10` keeps a margin for a skipped run.
 
 ### Cross-listing detection
 
-The `fingerprint` column (column 8) exists to catch a specific double-submission hazard: the same role posted by the direct employer **and** by a recruitment agency, often with the employer name stripped from the agency listing. URL dedup and company+role dedup both miss this pair because the URLs and company names are different — but agencies rarely rewrite the requirements text, so a near-identical JD body is a reliable signal.
+The `fingerprint` column exists to catch a specific double-submission hazard: the same role posted by the direct employer **and** by a recruitment agency, often with the employer name stripped from the agency listing. URL dedup and company+role dedup both miss this pair because the URLs and company names are different — but agencies rarely rewrite the requirements text, so a near-identical JD body is a reliable signal.
 
 How it works:
 

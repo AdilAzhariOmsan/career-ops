@@ -1,4 +1,4 @@
-import { pickSoleInstalled } from "./cli-pick.mjs";
+import { keepIfInstalled, pickSoleInstalled } from "./cli-pick.mjs";
 
 export const CONFIG_KEY = "career-ops:config";
 
@@ -47,8 +47,15 @@ function isCliEntry(c: unknown): c is { id: string; installed?: boolean } {
  * swapped from one CLI to another leaves a stale id in localStorage, and
  * `resolveCli()` on the server returns null for it, so every run fails with
  * `CLI '<id>' not found` until Config is reopened (#4012).
+ *
+ * `onStale` fires when a saved id is dropped for not being installed, with the
+ * id that replaced it (or null). The replacement is persisted, so the old value
+ * is otherwise gone without a trace — and a transient `installed: false` (a
+ * reinstall in flight, a PATH not yet refreshed) is enough to trigger it.
  */
-export async function resolveCliId(): Promise<string | null> {
+export async function resolveCliId(
+  onStale?: (stale: string, replacement: string | null) => void,
+): Promise<string | null> {
   const saved = readSavedCliId();
   let clis: { id: string; installed?: boolean }[] | undefined;
   try {
@@ -65,11 +72,9 @@ export async function resolveCliId(): Promise<string | null> {
     // saved id rather than stranding a working setup on a transient failure.
     return saved;
   }
-  if (saved && clis.some((c) => c.id === saved && c.installed)) {
-    return saved;
-  }
+  if (keepIfInstalled(saved, clis)) return saved;
   const sole = pickSoleInstalled(clis);
-  if (!sole) return null;
-  persistCliId(sole);
+  if (sole) persistCliId(sole);
+  if (saved) onStale?.(saved, sole);
   return sole;
 }

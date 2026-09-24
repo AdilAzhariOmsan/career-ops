@@ -17,7 +17,7 @@ const CONFIG_KEY = "career-ops:config";
 
 // Install fake localStorage + fetch and return the backing store so a test can
 // assert what got persisted.
-function stubEnv({ saved, clis, fetchThrows, httpError } = {}) {
+function stubEnv({ saved, clis, fetchThrows, httpError, errorBody = { error: "boom" } } = {}) {
   const store = new Map();
   if (saved !== undefined) {
     store.set(CONFIG_KEY, JSON.stringify({ mode: "cli", cliId: saved }));
@@ -30,7 +30,7 @@ function stubEnv({ saved, clis, fetchThrows, httpError } = {}) {
   globalThis.fetch = async (url) => {
     assert.equal(url, "/api/clis");
     if (fetchThrows) throw new Error("network down");
-    if (httpError) return { ok: false, status: 500, json: async () => ({ error: "boom" }) };
+    if (httpError) return { ok: false, status: 500, json: async () => errorBody };
     return { ok: true, status: 200, json: async () => ({ clis }) };
   };
   return store;
@@ -106,4 +106,60 @@ test("a malformed /api/clis entry (no id) is not picked as the sole install", as
   const store = stubEnv({ clis: [{ installed: true }] });
   assert.equal(await resolveCliId(), null);
   assert.equal(savedCliId(store), undefined, "a malformed entry must not be persisted as the picked CLI");
+});
+
+test("a non-2xx /api/clis response is not parsed even when its body looks like a CLI list", async () => {
+  // Without the r.ok guard this body resolves: 'claude' is absent, 'opencode'
+  // is the sole install, so the saved choice would be overwritten from an
+  // error response. The plain error body above can't catch that — it fails the
+  // Array.isArray check with or without the guard.
+  const store = stubEnv({
+    saved: "claude",
+    httpError: true,
+    errorBody: { clis: [{ id: "opencode", installed: true }] },
+  });
+  assert.equal(await resolveCliId(), "claude");
+  assert.equal(savedCliId(store), "claude", "an error response must not rewrite the saved id");
+});
+
+// --- onStale: a replaced saved id is reported, not dropped silently ---
+
+test("onStale reports the stale id and the CLI that replaced it", async () => {
+  stubEnv({
+    saved: "opencode",
+    clis: [
+      { id: "claude", installed: true },
+      { id: "opencode", installed: false },
+    ],
+  });
+  const calls = [];
+  assert.equal(await resolveCliId((...a) => calls.push(a)), "claude");
+  assert.deepEqual(calls, [["opencode", "claude"]]);
+});
+
+test("onStale reports a stale id with no replacement as null", async () => {
+  stubEnv({
+    saved: "opencode",
+    clis: [
+      { id: "claude", installed: true },
+      { id: "codex", installed: true },
+    ],
+  });
+  const calls = [];
+  assert.equal(await resolveCliId((...a) => calls.push(a)), null);
+  assert.deepEqual(calls, [["opencode", null]]);
+});
+
+test("onStale stays quiet when nothing was replaced", async () => {
+  const calls = [];
+  const onStale = (...a) => calls.push(a);
+
+  stubEnv({ saved: "claude", clis: [{ id: "claude", installed: true }] });
+  await resolveCliId(onStale);
+  stubEnv({ clis: [{ id: "claude", installed: true }] }); // nothing saved to go stale
+  await resolveCliId(onStale);
+  stubEnv({ saved: "claude", fetchThrows: true }); // couldn't check, kept
+  await resolveCliId(onStale);
+
+  assert.deepEqual(calls, []);
 });

@@ -112,7 +112,15 @@ export function JobsProvider({ children }: { children: React.ReactNode }) {
         // resolveCliId() validates the saved id against what is installed; a
         // bare readSavedCliId() here would short-circuit that check and launch
         // a run against an uninstalled CLI (#4012).
-        const cliId = await resolveCliId();
+        // A stale saved id is replaced silently otherwise — name the switch in
+        // the job log so a transient "not installed" can't rewrite the user's
+        // choice without a record.
+        const cliId = await resolveCliId((stale, replacement) => {
+          const label = replacement
+            ? `Saved CLI '${stale}' is not installed — using '${replacement}'`
+            : `Saved CLI '${stale}' is not installed`;
+          patch(id, (j) => ({ ...j, steps: [...j.steps, { kind: "status", label, ts: Date.now() }] }));
+        });
         if (!cliId) {
           patch(id, (j) => ({
             ...j,

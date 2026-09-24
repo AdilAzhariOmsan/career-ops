@@ -53,19 +53,25 @@ function isCliEntry(c: unknown): c is { id: string; installed?: boolean } {
  * is otherwise gone without a trace — and a transient `installed: false` (a
  * reinstall in flight, a PATH not yet refreshed) is enough to trigger it.
  */
+// /api/clis is a synchronous PATH scan — no subprocesses — so this is slack,
+// not an estimate.
+const CLIS_TIMEOUT_MS = 5000;
+
 export async function resolveCliId(
   onStale?: (stale: string, replacement: string | null) => void,
 ): Promise<string | null> {
   const saved = readSavedCliId();
   let clis: { id: string; installed?: boolean }[] | undefined;
   try {
-    const r = await fetch("/api/clis");
+    // Bounded: every job start awaits this, so a stalled request would leave
+    // the job at "Starting…" instead of reaching the saved-id fallback below.
+    const r = await fetch("/api/clis", { signal: AbortSignal.timeout(CLIS_TIMEOUT_MS) });
     if (r.ok) {
       const d = (await r.json()) as { clis?: { id: string; installed?: boolean }[] };
       clis = d.clis;
     }
   } catch {
-    // network error — fall through to the not-an-array guard below
+    // network error or timeout — fall through to the not-an-array guard below
   }
   if (!Array.isArray(clis) || !clis.every(isCliEntry)) {
     // /api/clis unreachable, errored, or malformed — can't check. Trust the

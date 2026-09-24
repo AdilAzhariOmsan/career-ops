@@ -6,7 +6,8 @@
 // unchecked, so every run 404'd ("CLI '<id>' not found") with nothing on screen
 // connecting the failure to a stale setting.
 //
-// Run:  node --test tests/lib/saved-cli-resolve.test.mjs
+// Run:  node --experimental-strip-types --test tests/lib/saved-cli-resolve.test.mjs
+//       (or `npm test`, which passes the flag; it is unflagged from Node 22.18)
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -162,4 +163,18 @@ test("onStale stays quiet when nothing was replaced", async () => {
   await resolveCliId(onStale);
 
   assert.deepEqual(calls, []);
+});
+
+test("the /api/clis fetch is bounded, and a timeout falls back to the saved id", async () => {
+  // Every job start awaits this fetch; unbounded, a stalled request would leave
+  // the job at "Starting…". Waiting out the real timeout would add seconds to
+  // the suite, so assert the signal is passed and reject the way it would.
+  stubEnv({ saved: "claude" });
+  let init;
+  globalThis.fetch = async (_url, i) => {
+    init = i;
+    throw new DOMException("The operation was aborted due to timeout", "TimeoutError");
+  };
+  assert.equal(await resolveCliId(), "claude");
+  assert.ok(init?.signal instanceof AbortSignal, "fetch('/api/clis') must carry an AbortSignal");
 });

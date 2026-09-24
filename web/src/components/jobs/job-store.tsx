@@ -108,6 +108,9 @@ export function JobsProvider({ children }: { children: React.ReactNode }) {
       };
       setJobs((js) => [job, ...js]);
 
+      // Declared before resolveCliId() so its stale-CLI notice lands in the log
+      // sent to /api/runs/save, not only in the live job.
+      const steps: JobStep[] = [];
       (async () => {
         // resolveCliId() validates the saved id against what is installed; a
         // bare readSavedCliId() here would short-circuit that check and launch
@@ -119,7 +122,9 @@ export function JobsProvider({ children }: { children: React.ReactNode }) {
           const label = replacement
             ? `Saved CLI '${stale}' is not installed — using '${replacement}'`
             : `Saved CLI '${stale}' is not installed`;
-          patch(id, (j) => ({ ...j, steps: [...j.steps, { kind: "status", label, ts: Date.now() }] }));
+          const step: JobStep = { kind: "status", label, ts: Date.now() };
+          steps.push(step);
+          patch(id, (j) => ({ ...j, steps: [...j.steps, step] }));
         });
         if (!cliId) {
           patch(id, (j) => ({
@@ -134,7 +139,6 @@ export function JobsProvider({ children }: { children: React.ReactNode }) {
         let verdictLine = ""; // latched separately so the 8000-char tail can't drop it
         let doneTokens = 0; // per-run token cost, forwarded on the done event (#6)
         let doneCostUsd: number | null = null;
-        const steps: JobStep[] = [];
         const finish = (status: "done" | "error", lastLabel?: string) => {
           const result = status === "done" ? parseVerdict(verdictLine || text) : undefined;
           const cost = status === "done" && doneTokens > 0 ? { tokens: doneTokens, usd: doneCostUsd ?? undefined } : undefined;

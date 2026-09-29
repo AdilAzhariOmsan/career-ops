@@ -4,8 +4,8 @@
  * generate-pdf.mjs — HTML → PDF via Playwright
  *
  * Usage:
- *   node career-ops/generate-pdf.mjs <input.html> <output.pdf> [--format=letter|a4] [--report=NNN] [--allow-reorder] [--max-pages=N] [--strict-pages]
- *   node career-ops/generate-pdf.mjs --batch=<manifest.json> [--format=letter|a4] [--allow-reorder] [--max-pages=N] [--strict-pages]
+ *   node career-ops/generate-pdf.mjs <input.html> <output.pdf> [--format=letter|a4] [--report=NNN] [--allow-reorder] [--allow-nonchronological] [--max-pages=N] [--strict-pages] [--skip-fact-check]
+ *   node career-ops/generate-pdf.mjs --batch=<manifest.json> [--format=letter|a4] [--allow-reorder] [--allow-nonchronological] [--max-pages=N] [--strict-pages]
  *
  * --batch renders every document in a JSON manifest (an array of
  * {input, output, format?, reportNum?}) through ONE shared Chromium instead of
@@ -24,6 +24,12 @@
  * role) rather than accidentally scrambled by an agent. Without this flag,
  * any divergence from cv.md's section order still fails generation.
  *
+ * --allow-nonchronological downgrades the work-experience ordering guard from
+ * a thrown error to a console warning. By default a CV whose experience entries
+ * are not newest-first fails generation: promoting "the most relevant role" to
+ * the top is a functional-resume technique that buries the candidate's most
+ * recent senior title and reads as concealment to ATS parsers and recruiters.
+ *
  * --max-pages=N sets the preferred rendered CV length (default: 2 pages).
  * The actual page count is checked after Chromium writes the PDF; overflow
  * warns with trimming guidance by default. --strict-pages turns that warning
@@ -41,8 +47,11 @@ import { fileURLToPath, pathToFileURL } from 'url';
 import { randomUUID } from 'node:crypto';
 import { getCareerOpsRoot } from './path-resolver.mjs';
 import { readStyleTokens, injectThemeStyle, readCvSectionOrder } from './theme-style.mjs';
+import { validateCvExperienceOrder } from './cv-experience-order.mjs';
 import { resolvePdfIndexPath, resolveTrackerPath, resolveWorkspaceRoot } from './tracker-utils.mjs';
 import { isMainModule } from './lib/is-main-module.mjs';
+import { stripEmptyRenderedSections } from './cv-sections-core.mjs';
+import { PAGE_CSS_SIZE, PAGE_FORMATS, normalizePageFormat, resolvePageFormat } from './lib/page-format.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const trackerPath = resolveTrackerPath(getCareerOpsRoot());
@@ -65,15 +74,28 @@ const PDF_PAGE_MARGIN = '0.6in';
 // self-correcting the moment it does. Same defect class as #3159.
 let __rootCache = { key: null, root: null, canonical: null };
 function refreshRootCache() {
-  const key = process.env.CAREER_OPS_TRACKER || '';
-  if (__rootCache.key !== key) {
-    // Always re-derive: falling back to the import-time const when the variable
-    // is unset would hand back the very value the poisoned import froze.
-    const root = resolveWorkspaceRoot(resolveTrackerPath(__dirname));
-    __rootCache = { key, root, canonical: realpathSync(root) };
+  // Derive the root on EVERY call and key the cache on the resolved value.
+  //
+  // The root can move three ways: CAREER_OPS_TRACKER, CAREER_OPS_ROOT /
+  // CAREER_OPS_DATA_DIR, and the .career-ops-data marker file. Keying on the
+  // environment alone misses the marker, which is a file on disk and can change
+  // while the environment does not, so the cache would keep serving a stale
+  // workspace. The resolved root is the one value that captures all three, and
+  // what is memoised is only realpathSync(), the syscall worth avoiding.
+  //
+  // getCareerOpsRoot(), not __dirname: the data root is the env vars, then a
+  // .career-ops-data marker, then the repo, and only the last of those is the
+  // script's own directory. With the user layer outside the checkout this
+  // derived the workspace from the CODE directory, so every path under the
+  // real data root read as an escape and the PDF was refused (#4389). Line 49
+  // already used getCareerOpsRoot(), so the two disagreed inside one module.
+  const root = resolveWorkspaceRoot(resolveTrackerPath(getCareerOpsRoot()));
+  if (__rootCache.key !== root) {
+    __rootCache = { key: root, root, canonical: realpathSync(root) };
   }
   return __rootCache;
 }
+
 // Two accessors on purpose, so each call site keeps the exact semantics it had:
 // the containment guard compares canonical forms (a symlinked ancestor must not
 // read as an escape), while the manifest/output helpers work in the lexical form
@@ -231,10 +253,11 @@ function foldDiacritics(text) {
 /**
  * Heading spelling -> canonical section key.
  *
- * Polish (modes/pl) is here because without these aliases the rendered Polish
- * titles match nothing derived from the English cv.md: validateCvSectionOrder()
- * finds fewer than two comparable sections and silently returns, leaving the
- * section-order guard disabled on every CV rendered in that mode.
+ * Polish (modes/pl) and Chinese (modes/zh-TW, modes/zh) are here because without
+ * these aliases the rendered non-English titles match nothing derived from the
+ * English cv.md: validateCvSectionOrder() finds fewer than two comparable
+ * sections and silently returns, leaving the section-order guard disabled on
+ * every CV rendered in those modes, and cv.sections resolves no block at all.
  *
  * Keys are folded on construction so authored diacritics match stripped input.
  */
@@ -289,6 +312,109 @@ const SECTION_ALIASES = new Map([
   ['nagrody i wyróżnienia', 'awards'],
   ['umiejętności', 'skills'],
   ['umiejętności techniczne', 'skills'],
+  // Spanish — the same failure again: with no entries here, a Spanish CV
+  // rendered in the documented modes/pdf.md order (Experiencia before Formación)
+  // was rejected against a cv.md listing Formación first, and --allow-reorder was
+  // the only way through. The vocabulary is what generated Spanish CVs render
+  // (Perfil Profesional, Competencias Clave, Experiencia Profesional, Formación,
+  // Certificaciones, Habilidades) plus each section's everyday synonyms. Keys are
+  // folded through foldDiacritics below, so accented and unaccented spellings
+  // both resolve.
+  ['perfil', 'summary'],
+  ['perfil profesional', 'summary'],
+  ['resumen', 'summary'],
+  ['resumen profesional', 'summary'],
+  ['competencias', 'competencies'],
+  ['competencias clave', 'competencies'],
+  ['competencias principales', 'competencies'],
+  ['experiencia', 'experience'],
+  ['experiencia profesional', 'experience'],
+  ['experiencia laboral', 'experience'],
+  ['trayectoria profesional', 'experience'],
+  ['proyectos', 'projects'],
+  ['proyectos destacados', 'projects'],
+  ['proyectos personales', 'projects'],
+  ['proyectos y laboratorios', 'projects'],
+  ['formación', 'education'],
+  ['formación académica', 'education'],
+  ['educación', 'education'],
+  ['estudios', 'education'],
+  ['certificaciones', 'certifications'],
+  ['certificados', 'certifications'],
+  ['premios', 'awards'],
+  ['reconocimientos', 'awards'],
+  ['premios y reconocimientos', 'awards'],
+  ['habilidades', 'skills'],
+  ['habilidades técnicas', 'skills'],
+  ['conocimientos técnicos', 'skills'],
+  ['herramientas e idiomas', 'skills'],
+  ['intereses', 'interests'],
+  // Chinese — the same failure the Polish block above fixes, for the two Chinese
+  // markets this repo ships modes for: Traditional (modes/zh-TW) and Simplified
+  // (modes/zh), rendered through templates/cv-template.zh-minimal.html. Both
+  // scripts are listed against every key because a CV written in either renders
+  // through this one alias table. The vocabulary is the repo's own: the
+  // `sections` payload in tests/zh-minimal-template.test.mjs (个人简介, 核心能力,
+  // 工作经历, 精选项目, 教育经历, 认证, 技术栈) and the modes' wording
+  // (e.g. "專業摘要" in modes/zh-TW/oferta.md), plus the everyday synonyms of
+  // each — the titles have no single canonical spelling because they come from
+  // a user-supplied `sections` override, not from DEFAULT_SECTION_TITLES.
+  ['專業摘要', 'summary'],
+  ['专业摘要', 'summary'],
+  ['摘要', 'summary'],
+  ['個人簡介', 'summary'],
+  ['个人简介', 'summary'],
+  ['簡介', 'summary'],
+  ['简介', 'summary'],
+  ['核心能力', 'competencies'],
+  ['核心競爭力', 'competencies'],
+  ['核心竞争力', 'competencies'],
+  ['工作經歷', 'experience'],
+  ['工作经历', 'experience'],
+  ['工作經驗', 'experience'],
+  ['工作经验', 'experience'],
+  ['專業經歷', 'experience'],
+  ['专业经历', 'experience'],
+  ['專案', 'projects'],
+  ['项目', 'projects'],
+  ['專案經驗', 'projects'],
+  ['项目经验', 'projects'],
+  ['專案經歷', 'projects'],
+  ['项目经历', 'projects'],
+  ['專案成就', 'projects'],
+  ['项目成就', 'projects'],
+  ['精選專案', 'projects'],
+  ['精选项目', 'projects'],
+  ['學歷', 'education'],
+  ['学历', 'education'],
+  ['教育背景', 'education'],
+  ['教育經歷', 'education'],
+  ['教育经历', 'education'],
+  ['證照', 'certifications'],
+  ['证照', 'certifications'],
+  ['證書', 'certifications'],
+  ['证书', 'certifications'],
+  ['專業證照', 'certifications'],
+  ['专业证书', 'certifications'],
+  ['認證', 'certifications'],
+  ['认证', 'certifications'],
+  ['資格認證', 'certifications'],
+  ['资格认证', 'certifications'],
+  ['獲獎', 'awards'],
+  ['获奖', 'awards'],
+  ['獎項', 'awards'],
+  ['奖项', 'awards'],
+  ['榮譽', 'awards'],
+  ['荣誉', 'awards'],
+  ['技能', 'skills'],
+  ['專長', 'skills'],
+  ['专长', 'skills'],
+  ['技術能力', 'skills'],
+  ['技术能力', 'skills'],
+  ['技術棧', 'skills'],
+  ['技术栈', 'skills'],
+  ['興趣', 'interests'],
+  ['兴趣', 'interests'],
 ].map(([alias, key]) => [foldDiacritics(alias), key]));
 
 function normalizeSectionTitle(text) {
@@ -335,6 +461,46 @@ function extractSourceSectionOrder(markdown) {
 }
 
 /**
+ * The section order `modes/pdf.md` documents under "Section order (optimized
+ * '6-second recruiter scan')" — Header, Professional Summary, Core
+ * Competencies, Work Experience, Projects, Education & Certifications,
+ * Skills — mapped through sectionKey()/SECTION_ALIASES the same way a
+ * rendered heading or a cv.md heading is. "Education & Certifications" is
+ * that document's own heading text and already folds to 'education' via the
+ * alias table (line above: `['education & certifications', 'education']`),
+ * so no separate normalization is needed for it. `certifications`, `awards`
+ * and `interests` are not named by modes/pdf.md's list — they are optional
+ * sections the shipped template (templates/cv-template.html) renders between
+ * Education and Skills — so they are included here in that template's own
+ * position to keep a real generated CV (which renders Education and
+ * Certifications as separate section-title elements) fully comparable
+ * against this order rather than only against the six pdf.md names it
+ * explicitly lists. See #3640.
+ */
+const CANONICAL_TAILORED_ORDER = [
+  'summary', 'competencies', 'experience', 'projects',
+  'education', 'certifications', 'awards', 'interests', 'skills',
+];
+const CANONICAL_TAILORED_POSITIONS = new Map(
+  CANONICAL_TAILORED_ORDER.map((key, index) => [key, index]),
+);
+
+/**
+ * First index in `comparableSections` whose key sits earlier in `positions`
+ * than the section right before it — i.e. the first place the rendered order
+ * violates the relative order `positions` encodes. -1 if no such index exists
+ * (the rendered order is consistent with `positions`).
+ */
+function findOrderDivergence(comparableSections, positions) {
+  for (let i = 1; i < comparableSections.length; i++) {
+    const previous = comparableSections[i - 1];
+    const current = comparableSections[i];
+    if (positions.get(current.key) < positions.get(previous.key)) return i;
+  }
+  return -1;
+}
+
+/**
  * @param {string} html
  * @param {string} cvMarkdown
  * @param {{ allowReorder?: boolean }} [options] - `allowReorder` downgrades a
@@ -342,6 +508,14 @@ function extractSourceSectionOrder(markdown) {
  *   where the section order was deliberately tailored (e.g. Projects moved
  *   ahead of Education for a technical-heavy role) rather than accidentally
  *   scrambled by an agent. See #1646.
+ *
+ *   A rendered order is accepted whenever it preserves the relative order of
+ *   EITHER cv.md's own headings OR the canonical modes/pdf.md tailoring order
+ *   above — the documented default workflow always moves Education after
+ *   Experience/Projects, which diverges from a typical cv.md on every
+ *   standard-compliant generation, so cv.md's order alone can't be the only
+ *   accepted target without making `allowReorder` mandatory rather than an
+ *   opt-in for genuine edge cases. See #3640.
  */
 export function validateCvSectionOrder(html, cvMarkdown, { allowReorder = false } = {}) {
   const rendered = extractRenderedSectionOrder(html);
@@ -352,23 +526,28 @@ export function validateCvSectionOrder(html, cvMarkdown, { allowReorder = false 
   const renderedComparable = rendered.filter(section => sourcePositions.has(section.key));
   if (renderedComparable.length < 2) return;
 
-  for (let i = 1; i < renderedComparable.length; i++) {
-    const previous = renderedComparable[i - 1];
-    const current = renderedComparable[i];
-    if (sourcePositions.get(current.key) < sourcePositions.get(previous.key)) {
-      const renderedOrder = renderedComparable.map(section => section.title).join(' -> ');
-      const sourceOrder = source
-        .filter(section => renderedComparable.some(renderedSection => renderedSection.key === section.key))
-        .map(section => section.title)
-        .join(' -> ');
-      const message = `CV section order diverges from cv.md: rendered ${renderedOrder}; cv.md ${sourceOrder}`;
-      if (allowReorder) {
-        console.warn(`⚠️  ${message} (proceeding — --allow-reorder set)`);
-        return;
-      }
-      throw new Error(message);
-    }
+  if (findOrderDivergence(renderedComparable, sourcePositions) === -1) return;
+
+  // Diverges from cv.md — but that alone isn't damning: it's also what every
+  // CV tailored per modes/pdf.md's documented order looks like. Only treat it
+  // as a real problem if it ALSO fails to match that canonical order.
+  const canonicalComparable = rendered.filter(section => CANONICAL_TAILORED_POSITIONS.has(section.key));
+  if (canonicalComparable.length >= 2
+      && findOrderDivergence(canonicalComparable, CANONICAL_TAILORED_POSITIONS) === -1) {
+    return;
   }
+
+  const renderedOrder = renderedComparable.map(section => section.title).join(' -> ');
+  const sourceOrder = source
+    .filter(section => renderedComparable.some(renderedSection => renderedSection.key === section.key))
+    .map(section => section.title)
+    .join(' -> ');
+  const message = `CV section order diverges from cv.md: rendered ${renderedOrder}; cv.md ${sourceOrder}`;
+  if (allowReorder) {
+    console.warn(`⚠️  ${message} (proceeding — --allow-reorder set)`);
+    return;
+  }
+  throw new Error(message);
 }
 
 /**
@@ -1010,9 +1189,14 @@ export function isWorkspaceOutputPath(pathValue, rootDir = currentWorkspaceRoot(
   }
 }
 
-export function injectPrintPageCss(html, format = 'a4') {
-  const normalizedFormat = String(format || 'a4').toLowerCase();
-  const pageSize = normalizedFormat === 'letter' ? 'Letter' : 'A4';
+export function injectPrintPageCss(html, format) {
+  // The only place the sheet size is set: page.pdf() below runs with
+  // preferCSSPageSize, so this @page rule IS the paper. It resolves through
+  // lib/page-format.mjs so a caller that passes nothing gets the user's
+  // configured size instead of a fallback private to this file.
+  const pageSize = PAGE_CSS_SIZE[resolvePageFormat(format, {
+    profilePath: resolve(workspaceRoot, 'config', 'profile.yml'),
+  })];
   // Read --page-margin (set by the template's own :root default, and overridden
   // by injectThemeStyle's block when style.margin is configured) instead of
   // hardcoding PDF_PAGE_MARGIN outright — this @page rule is injected last, so a
@@ -1087,9 +1271,12 @@ function updatePDFManifest(reportNum, pdfPath, htmlPath, format) {
  */
 async function generatePDF() {
   const args = process.argv.slice(2);
+  let skipFactCheck = false;
 
   // Parse arguments
-  let inputPath, outputPath, format = 'a4', reportNum = '', allowReorder = false;
+  // No flag seen yet: null, not a paper size. The default belongs to
+  // lib/page-format.mjs, which ranks it below the user's config/profile.yml.
+  let inputPath, outputPath, format = null, reportNum = '', allowReorder = false, allowNonChronological = false;
   let maxPages = 2, maxPagesInput = '2', strictPages = false, batchManifestPath = null;
 
   for (const arg of args) {
@@ -1104,8 +1291,12 @@ async function generatePDF() {
       maxPages = Number(maxPagesInput);
     } else if (arg === '--allow-reorder') {
       allowReorder = true;
+    } else if (arg === '--allow-nonchronological') {
+      allowNonChronological = true;
     } else if (arg === '--strict-pages') {
       strictPages = true;
+    } else if (arg === '--skip-fact-check') {
+      skipFactCheck = true;
     } else if (!inputPath) {
       inputPath = arg;
     } else if (!outputPath) {
@@ -1118,10 +1309,25 @@ async function generatePDF() {
     process.exit(1);
   }
 
+  // Resolve the format before the batch branch, so a batch and a single render
+  // inherit the same configured size and a bad --format fails the same way in
+  // both. An explicit flag is still rejected loudly: falling through to the
+  // profile would print a typo on whatever size happened to be configured.
+  if (format !== null) {
+    const normalized = normalizePageFormat(format);
+    if (!normalized) {
+      console.error(`Invalid format "${format}". Use: ${[...PAGE_FORMATS].join(', ')}`);
+      process.exit(1);
+    }
+    format = normalized;
+  }
+  format = resolvePageFormat(format, { profilePath: resolve(workspaceRoot, 'config', 'profile.yml') });
+
   // Batch mode (#2384): render every document in the manifest through one
-  // Chromium. Applies the global --max-pages/--strict-pages/--allow-reorder to
-  // all entries; each entry supplies its own input/output and may override
-  // format/reportNum. Takes no positional input/output.
+  // Chromium. Applies the global --max-pages/--strict-pages/--allow-reorder/
+  // --allow-nonchronological to all entries; each entry supplies its own
+  // input/output and may override format/reportNum. Takes no positional
+  // input/output.
   if (batchManifestPath) {
     // --report keys a single PDF to one tracker row; a batch renders N distinct
     // CVs, so one global --report would mislabel them all. Per-entry "reportNum"
@@ -1131,12 +1337,12 @@ async function generatePDF() {
       console.error('--report is not valid with --batch. Set "reportNum" per entry in the manifest instead.');
       process.exit(1);
     }
-    return runBatchFromManifest(batchManifestPath, { format, maxPages, strictPages, allowReorder });
+    return runBatchFromManifest(batchManifestPath, { format, maxPages, strictPages, allowReorder, allowNonChronological });
   }
 
   if (!inputPath || !outputPath) {
-    console.error('Usage: node generate-pdf.mjs <input.html> <output.pdf> [--format=letter|a4] [--report=NNN] [--allow-reorder] [--max-pages=N] [--strict-pages]');
-    console.error('   or: node generate-pdf.mjs --batch=<manifest.json> [--format=letter|a4] [--allow-reorder] [--max-pages=N] [--strict-pages]');
+    console.error('Usage: node generate-pdf.mjs <input.html> <output.pdf> [--format=letter|a4] [--report=NNN] [--allow-reorder] [--allow-nonchronological] [--max-pages=N] [--strict-pages]');
+    console.error('   or: node generate-pdf.mjs --batch=<manifest.json> [--format=letter|a4] [--allow-reorder] [--allow-nonchronological] [--max-pages=N] [--strict-pages]');
     console.error('');
     console.error('Batch mode renders every document in the JSON manifest (an array of');
     console.error('{input, output, format?, reportNum?}) through one shared Chromium and writes');
@@ -1174,13 +1380,6 @@ async function generatePDF() {
     process.exit(1);
   }
 
-  // Validate format
-  const validFormats = ['a4', 'letter'];
-  if (!validFormats.includes(format)) {
-    console.error(`Invalid format "${format}". Use: ${validFormats.join(', ')}`);
-    process.exit(1);
-  }
-
   console.log(`📄 Input:  ${inputPath}`);
   console.log(`📁 Output: ${outputPath}`);
   console.log(`📏 Format: ${format.toUpperCase()}`);
@@ -1193,6 +1392,15 @@ async function generatePDF() {
   } catch (err) {
     if (err?.code !== 'ENOENT') throw err;
   }
+  // Drop the optional sections that came in as a bare header — a title with
+  // nothing under it (#3986). The builders already strip these from the payload
+  // side, but neither builder is on every path here: the web pdf flow has the
+  // agent emit finished HTML, which reaches this script with the empty wrappers
+  // still in place. Deciding from the rendered content covers both, and running
+  // it before the reorder and the guard means they judge the document that will
+  // actually be printed. A CV with nothing empty comes through unchanged.
+  html = stripEmptyRenderedSections(html);
+
   // Apply the user's declared section order (config/profile.yml `cv.sections`)
   // before the guard runs, so the guard judges the document that will be
   // printed. Anchored to workspaceRoot, NOT __dirname: readStyleTokens() reads
@@ -1203,6 +1411,7 @@ async function generatePDF() {
   html = reorderCvSections(html, readCvSectionOrder(resolve(workspaceRoot, 'config', 'profile.yml')));
 
   validateCvSectionOrder(html, cvMarkdown, { allowReorder });
+  validateCvExperienceOrder(html, { allowNonChronological });
 
   // Normalize text for ATS compatibility (issue #1)
   const normalized = normalizeTextForATS(html);
@@ -1211,6 +1420,37 @@ async function generatePDF() {
   if (totalReplacements > 0) {
     const breakdown = Object.entries(normalized.replacements).map(([k, v]) => `${k}=${v}`).join(', ');
     console.log(`🧹 ATS normalization: ${totalReplacements} replacements (${breakdown})`);
+  }
+
+  // Fact gate. generate-cover-letter.mjs already blocks on assertFacts before
+  // importing Playwright, on the reasoning that a failed gate must not leave a
+  // misleading artifact behind. A tailored CV is the same class of document and
+  // carries the numbers a reader acts on, but the CV path enforced the gate only
+  // as an instructed step in the mode prompts — so a programmatic caller (a
+  // bridge, a script, a batch run) rendered inflated metrics in silence. Gate the
+  // normalized HTML, which is the document that actually prints.
+  if (!skipFactCheck && cvMarkdown) {
+    // Imported lazily, INSIDE the guard. A static import is resolved at module
+    // load whether or not this branch runs, and the page-budget/batch suites copy
+    // generate-pdf.mjs alone into a temp workspace — a static import of a sibling
+    // that isn't copied made every one of those suites die with
+    // ERR_MODULE_NOT_FOUND before reaching the behaviour under test. Those
+    // fixtures also ship no cv.md, so this branch is never entered there. If the
+    // module is genuinely missing in a real workspace this throws and the render
+    // fails, which is the correct direction to fail for a fact gate.
+    const { assertFacts } = await import('./verify-cv-facts.mjs');
+    const factCheck = assertFacts(html, { label: basename(inputPath) });
+    // Ahead of the verdict, because it qualifies it: with no config the phrase
+    // lists are empty, so a "passed" below covers metrics and facts only.
+    if (factCheck.configMissing) {
+      console.warn('⚠️  No config/cv-facts.json — forbidden/advisory phrase checks did not run.');
+    }
+    if (factCheck.verdict === 'warn') {
+      console.warn(`⚠️  CV fact check warning: ${basename(inputPath)}`);
+      for (const phrase of factCheck.warnings) console.warn(`  - advisory phrase: ${phrase}`);
+    } else {
+      console.log('✅ Fact check passed');
+    }
   }
 
   return renderHtmlToPdf(html, outputPath, {
@@ -1240,7 +1480,7 @@ async function generatePDF() {
  * for success; it exits zero only when every document rendered.
  *
  * @param {string} manifestPath - Path to the JSON manifest.
- * @param {{format: string, maxPages: number, strictPages: boolean, allowReorder: boolean}} globals
+ * @param {{format: string, maxPages: number, strictPages: boolean, allowReorder: boolean, allowNonChronological: boolean}} globals
  * @returns {Promise<{ok: number, failed: number, results: Array}>}
  */
 async function runBatchFromManifest(manifestPath, globals) {
@@ -1279,7 +1519,6 @@ async function runBatchFromManifest(manifestPath, globals) {
     process.exit(1);
   }
 
-  const validFormats = ['a4', 'letter'];
   const results = new Array(manifest.length).fill(null);
   const entries = [];
 
@@ -1291,11 +1530,11 @@ async function runBatchFromManifest(manifestPath, globals) {
   } catch (err) {
     if (err?.code !== 'ENOENT') throw err;
   }
-  // One profile governs the whole batch, so the declared order is read once
-  // rather than per entry. Anchored to workspaceRoot for the same reason the
-  // single render is: it is the anchor readStyleTokens() and the cv.md read
-  // already use, so one profile.yml supplies every setting.
-  const cvSectionOrder = readCvSectionOrder(resolve(workspaceRoot, 'config', 'profile.yml'));
+  // Read one workspace profile for the batch. The working directory must not
+  // choose a different theme from the single-document render.
+  const profilePath = resolve(workspaceRoot, 'config', 'profile.yml');
+  const cvSectionOrder = readCvSectionOrder(profilePath);
+  const styleTokens = readStyleTokens(profilePath);
 
   for (let i = 0; i < manifest.length; i++) {
     const spec = manifest[i];
@@ -1304,9 +1543,10 @@ async function runBatchFromManifest(manifestPath, globals) {
         throw new Error('each entry needs a string "input" and "output"');
       }
 
-      const entryFormat = (spec.format || globals.format).toLowerCase();
-      if (!validFormats.includes(entryFormat)) {
-        throw new Error(`invalid format "${entryFormat}" (use: ${validFormats.join(', ')})`);
+      const declaredFormat = spec.format || globals.format;
+      const entryFormat = normalizePageFormat(declaredFormat);
+      if (!entryFormat) {
+        throw new Error(`invalid format "${declaredFormat}" (use: ${[...PAGE_FORMATS].join(', ')})`);
       }
 
       const entryReport = (spec.reportNum ?? '').toString().trim();
@@ -1331,11 +1571,14 @@ async function runBatchFromManifest(manifestPath, globals) {
       }
 
       let html = await readFile(entryInput, 'utf-8');
-      // Same order as the single render: reorder first so the guard judges the
-      // document that will actually be printed. Without this the batch path
-      // rendered N CVs with cv.sections silently inert.
+      // Same order as the single render: strip the bare-header sections, then
+      // reorder, so the guard judges the document that will actually be
+      // printed. Without this the batch path rendered N CVs with cv.sections
+      // silently inert.
+      html = stripEmptyRenderedSections(html);
       html = reorderCvSections(html, cvSectionOrder);
       validateCvSectionOrder(html, cvMarkdown, { allowReorder: globals.allowReorder });
+      validateCvExperienceOrder(html, { allowNonChronological: globals.allowNonChronological });
       html = normalizeTextForATS(html).html;
 
       entries.push({
@@ -1348,6 +1591,7 @@ async function runBatchFromManifest(manifestPath, globals) {
         inputPath: entryInput,
         maxPages: globals.maxPages,
         strictPages: globals.strictPages,
+        styleTokens,
       });
     } catch (err) {
       console.error(`❌ Skipping batch entry ${i} (${spec?.output ?? '?'}): ${err.message}`);
@@ -1522,8 +1766,8 @@ export async function renderHtmlToPdf(html, outputPath, opts = {}) {
  * @returns {Promise<{outputPath: string, pageCount: number, size: number}>}
  */
 async function renderInPage(browser, html, outputPath, opts = {}) {
-  const format = opts.format || 'a4';
   const outputRoot = opts.workspaceRoot || workspaceRoot;
+  const format = resolvePageFormat(opts.format, { profilePath: resolve(outputRoot, 'config', 'profile.yml') });
   const requestedBaseDir = resolve(opts.baseDir || outputRoot);
   // Temporary HTML is an output too: never let an external input path or
   // caller-supplied baseDir choose an arbitrary directory. If the requested
@@ -1549,7 +1793,7 @@ async function renderInPage(browser, html, outputPath, opts = {}) {
   // properties so the templates' var(--x, <default>) reads pick them up (#1837).
   // No `style:` block → no tokens → byte-identical output. Both the CV path and
   // the cover-letter path flow through here, so both are themed from one place.
-  const styleTokens = opts.styleTokens ?? readStyleTokens();
+  const styleTokens = opts.styleTokens ?? readStyleTokens(resolve(outputRoot, 'config', 'profile.yml'));
   html = injectThemeStyle(html, styleTokens);
 
   html = injectPrintPageCss(html, format);

@@ -110,3 +110,49 @@ test('scan-hn reports AI errors and exits non-zero when every Gemini call fails'
     rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
   }
 });
+
+// Before #4598 scan-hn read no argv at all, so `--help` or a mistyped flag ran
+// a live scan. Any fetch here is recorded, and the data root must stay empty.
+test('scan-hn handles --help and rejects unknown flags without scanning', async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), 'career-ops-scanhn-flags-'));
+  try {
+    const requests = join(dir, 'requests');
+    const preload = join(dir, 'fetch-trap.cjs');
+    writeFileSync(preload, `
+      const { appendFileSync } = require('node:fs');
+      globalThis.fetch = async (input) => {
+        appendFileSync(${JSON.stringify(requests)}, String(input?.url ?? input) + '\\n');
+        throw new Error('network forbidden in test');
+      };
+    `);
+    const env = { ...process.env, CAREER_OPS_ROOT: dir, CAREER_OPS_DATA_DIR: '', GEMINI_API_KEY: '' };
+    delete env.CAREER_OPS_PORTALS;
+    const run = (...args) => spawnSync(process.execPath, [
+      '--require', preload,
+      fileURLToPath(new URL('../scan-hn.mjs', import.meta.url)),
+      ...args,
+    ], { cwd: dir, encoding: 'utf8', timeout: 30000, env });
+
+    for (const flag of ['--help', '-h']) {
+      await t.test(`${flag} prints usage and exits 0`, () => {
+        const r = run(flag);
+        assert.equal(r.status, 0, r.stderr);
+        assert.match(r.stdout, /Usage: node scan-hn\.mjs/);
+      });
+    }
+
+    for (const args of [['--dry-run'], ['--help', '--bogus']]) {
+      await t.test(`${args.join(' ')} exits 1 naming the bad flag`, () => {
+        const r = run(...args);
+        assert.equal(r.status, 1, r.stdout);
+        assert.match(r.stderr, new RegExp(`unrecognized flag\\(s\\): ${args.at(-1)}`));
+        assert.doesNotMatch(r.stdout, /Fetching latest HN/);
+      });
+    }
+
+    assert.equal(existsSync(requests), false, 'scan-hn made a network request');
+    assert.equal(existsSync(join(dir, 'data')), false, 'scan-hn wrote to the data root');
+  } finally {
+    rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+  }
+});

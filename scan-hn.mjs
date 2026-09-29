@@ -22,6 +22,7 @@ import { localToday } from './lib/local-today.mjs';
 // Import the deterministic provider
 import hnProvider from './providers/hackernews.mjs';
 import { isMainModule } from './lib/is-main-module.mjs';
+import { validateFlags } from './lib/cli-flags.mjs';
 import { printScanSummaryHeader } from './lib/scan-summary-marker.mjs';
 
 // ── Configuration ────────────────────────────────────────────────────
@@ -152,6 +153,20 @@ async function main() {
   if (newOffers.length > 0) console.log(`\n🎉 Success: ${newOffers.length} offers added.`);
 }
 
+// scan-hn takes no options, so any flag other than --help is a mistake. Without
+// this check `--help` (or a mistyped `--dry-run`) fell through to a live scan
+// that writes to data/pipeline.md and the scan history (#4598).
+const KNOWN_FLAGS = ['--help', '-h'];
+const USAGE = `Usage: node scan-hn.mjs
+
+Scans the latest "Ask HN: Who is hiring?" thread for postings matching
+hn_hiring.keywords in portals.yml and appends new ones to data/pipeline.md.
+Uses Gemini for extraction when GEMINI_API_KEY is set, keyword matching otherwise.
+
+Options:
+  -h, --help   Show this help and exit`;
+
 if (isMainModule(import.meta.url)) {
+  validateFlags(process.argv.slice(2), KNOWN_FLAGS, USAGE);
   main().catch(err => { console.error("Fatal:", err.message); process.exit(1); });
 }

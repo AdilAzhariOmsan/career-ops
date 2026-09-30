@@ -1,5 +1,5 @@
 import { spawnHeadlessCli } from "@/lib/spawn-cli.mjs";
-import { resolveCli } from "@/lib/clis";
+import { cliSubstitutionNotice, cliUnavailableError, resolveCliOrFallback } from "@/lib/clis";
 import { careerOpsRoot, readMemory, doctorState } from "@/lib/career-ops";
 import { CAPS } from "@/lib/worker-capabilities.mjs";
 import { scopeFrom } from "@/lib/claude-invocation.mjs";
@@ -59,19 +59,22 @@ export async function POST(req: Request) {
   } catch {
     return new Response(JSON.stringify({ error: "bad json" }), { status: 400 });
   }
-  const { message, cliId, pageContext } = body;
-  if (!message || !cliId) {
+  const { message, cliId: requestedCliId, pageContext } = body;
+  if (!message || !requestedCliId) {
     return new Response(JSON.stringify({ error: "message and cliId required" }), { status: 400 });
   }
 
-  const resolved = resolveCli(cliId);
+  const resolved = resolveCliOrFallback(requestedCliId);
   if (!resolved) {
-    return new Response(JSON.stringify({ error: `CLI '${cliId}' not found on this machine` }), {
+    return new Response(JSON.stringify(cliUnavailableError(requestedCliId)), {
       status: 404,
       headers: { "Content-Type": "application/json" },
     });
   }
   const { spec, binPath } = resolved;
+  // The CLI actually running: fencing and argv below are keyed on it.
+  const cliId = spec.id;
+  const substitution = cliSubstitutionNotice(resolved);
 
   const history = (body.history ?? []).slice(-8);
   const convo = history.map((m) => `${m.role === "user" ? "User" : "Assistant"}: ${m.content}`).join("\n");
@@ -189,6 +192,7 @@ export async function POST(req: Request) {
       if (fencing.notice) safeEnqueue(`⚠️ ${fencing.notice}
 
 `);
+      if (substitution) safeEnqueue(`⚠️ ${substitution}\n\n`);
 
       child.stdout.on("data", (d: Buffer) => {
         if (closed) return;

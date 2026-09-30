@@ -2,7 +2,7 @@ import { spawnHeadlessCli } from "@/lib/spawn-cli.mjs";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { resolveCli } from "@/lib/clis";
+import { cliSubstitutionNotice, cliUnavailableError, resolveCliOrFallback } from "@/lib/clis";
 import { careerOpsRoot } from "@/lib/career-ops";
 import { CAPS } from "@/lib/worker-capabilities.mjs";
 import { scopeFrom } from "@/lib/claude-invocation.mjs";
@@ -85,7 +85,10 @@ export async function POST(req: Request) {
       if (!(file instanceof File)) return Response.json({ error: "no file" }, { status: 400 });
       // Reading a PDF/DOCX from a path needs the CLI's file tool, which only Claude
       // is granted here. Tell non-Claude users plainly instead of failing opaquely.
-      if (cliId !== "claude" && /\.(pdf|docx)$/i.test(file.name)) {
+      // Judged on the CLI that will actually run: a stale saved id falls back to
+      // the sole installed CLI below, and that may well be Claude (#4607).
+      const runsAs = resolveCliOrFallback(cliId)?.spec.id ?? cliId;
+      if (runsAs !== "claude" && /\.(pdf|docx)$/i.test(file.name)) {
         return Response.json({ error: "PDF upload needs Claude Code — paste your CV text instead." }, { status: 400 });
       }
       const ext = (file.name.match(/\.[a-z0-9]+$/i)?.[0] || ".pdf").toLowerCase();
@@ -100,12 +103,15 @@ export async function POST(req: Request) {
     return Response.json({ error: "bad request" }, { status: 400 });
   }
 
-  const resolved = resolveCli(cliId);
+  const resolved = resolveCliOrFallback(cliId);
   if (!resolved) {
     if (tempFile) cleanupTemp(tempFile);
-    return Response.json({ error: `CLI '${cliId}' not found on this machine` }, { status: 404 });
+    return Response.json(cliUnavailableError(cliId), { status: 404 });
   }
   const { spec, binPath } = resolved;
+  // The CLI actually running: fencing and argv below are keyed on it.
+  cliId = spec.id;
+  const substitution = cliSubstitutionNotice(resolved);
   const prompt = ingestPrompt(promptSource);
   const isClaude = cliId === "claude";
   const args = isClaude
@@ -197,6 +203,7 @@ export async function POST(req: Request) {
       // pre-existing limit of this view, not something to work around here.
       const fencing = fencingReport({ cliId, cliName: spec.name, capabilities: CAPS.localReadOnly });
       if (fencing.notice) safeEnqueue(`⚠️ ${fencing.notice}\n\n`);
+      if (substitution) safeEnqueue(`⚠️ ${substitution}\n\n`);
 
       child.stdout.on("data", (d: Buffer) => {
         if (closed) return;

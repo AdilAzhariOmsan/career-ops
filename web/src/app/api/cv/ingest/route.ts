@@ -2,7 +2,7 @@ import { spawnHeadlessCli } from "@/lib/spawn-cli.mjs";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { cliSubstitutionNotice, cliUnavailableError, resolveCliOrFallback } from "@/lib/clis";
+import { cliSubstitutionNotice, cliUnavailableError, resolveCliOrFallback, type CliResolution } from "@/lib/clis";
 import { careerOpsRoot } from "@/lib/career-ops";
 import { CAPS } from "@/lib/worker-capabilities.mjs";
 import { scopeFrom } from "@/lib/claude-invocation.mjs";
@@ -70,6 +70,7 @@ export async function POST(req: Request) {
   let cliId = "";
   let promptSource = "";
   let tempFile: string | null = null;
+  let resolved: CliResolution | null = null;
 
   try {
     if (ctype.includes("application/json")) {
@@ -83,12 +84,15 @@ export async function POST(req: Request) {
       cliId = String(form.get("cliId") || "");
       const file = form.get("file");
       if (!(file instanceof File)) return Response.json({ error: "no file" }, { status: 400 });
+      // Resolve first: if no CLI can run, that is the error to show, not the PDF
+      // one below, which would wrongly say Claude is missing (#4607).
+      resolved = resolveCliOrFallback(cliId);
+      if (!resolved) return Response.json(cliUnavailableError(cliId), { status: 404 });
       // Reading a PDF/DOCX from a path needs the CLI's file tool, which only Claude
       // is granted here. Tell non-Claude users plainly instead of failing opaquely.
       // Judged on the CLI that will actually run: a stale saved id falls back to
-      // the sole installed CLI below, and that may well be Claude (#4607).
-      const runsAs = resolveCliOrFallback(cliId)?.spec.id ?? cliId;
-      if (runsAs !== "claude" && /\.(pdf|docx)$/i.test(file.name)) {
+      // the sole installed CLI, and that may well be Claude.
+      if (resolved.spec.id !== "claude" && /\.(pdf|docx)$/i.test(file.name)) {
         return Response.json({ error: "PDF upload needs Claude Code — paste your CV text instead." }, { status: 400 });
       }
       const ext = (file.name.match(/\.[a-z0-9]+$/i)?.[0] || ".pdf").toLowerCase();
@@ -103,7 +107,7 @@ export async function POST(req: Request) {
     return Response.json({ error: "bad request" }, { status: 400 });
   }
 
-  const resolved = resolveCliOrFallback(cliId);
+  resolved ??= resolveCliOrFallback(cliId);
   if (!resolved) {
     if (tempFile) cleanupTemp(tempFile);
     return Response.json(cliUnavailableError(cliId), { status: 404 });

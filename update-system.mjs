@@ -10,6 +10,7 @@
  *   node update-system.mjs check      # Check if a newer release is published
  *                                     # (merges to main between releases
  *                                     # never prompt; see checkStatus())
+ *   node update-system.mjs status     # Print installed version (with short SHA)
  *   node update-system.mjs check --force
  *                                     # …even for a release the user dismissed
  *   node update-system.mjs apply --confirm
@@ -253,6 +254,7 @@ const SYSTEM_PATHS = [
   'lib/scan-summary-marker.mjs',
   'lib/is-main-module.mjs',
   'lib/mjs-files.mjs',
+  'lib/scratch-dirs.mjs',
   'lib/outcome-dir.mjs',
   'lib/outcome-types.mjs',
   'lib/latex-escape.mjs',
@@ -472,6 +474,7 @@ const SYSTEM_PATHS = [
   'LICENSE',
   'CITATION.cff',
   'funding.json',
+  '.well-known/',
   '.editorconfig',
   '.github/',
   'package.json',
@@ -706,9 +709,28 @@ function parseVersionFile(raw) {
   return raw.trim().split(/\s+/)[0] || '';
 }
 
-function localVersion() {
-  const vPath = join(ROOT, 'VERSION');
+function localShortSha(root = ROOT) {
+  if (gitToplevelMismatch(root)) return '';
+  try {
+    return gitQuietIn(root, 'rev-parse', '--short', 'HEAD') || '';
+  } catch {
+    return '';
+  }
+}
+
+function formatVersionWithSha(version, sha) {
+  return sha ? `${version} (${sha})` : version;
+}
+
+function localVersion(root = ROOT) {
+  const vPath = join(root, 'VERSION');
   return existsSync(vPath) ? parseVersionFile(readFileSync(vPath, 'utf-8')) : '0.0.0';
+}
+
+export function formatLocalVersion(root = ROOT) {
+  const version = localVersion(root);
+  const sha = localShortSha(root);
+  return formatVersionWithSha(version, sha);
 }
 
 function compareVersions(a, b) {
@@ -827,11 +849,11 @@ function git(...args) {
  * @param {...string} args - git arguments.
  * @returns {string} Trimmed stdout.
  */
-function gitQuiet(...args) {
+export function gitQuietIn(root, ...args) {
   const timeout = gitTimeoutMs(args);
   try {
     return execFileSync('git', args, {
-      cwd: ROOT, encoding: 'utf-8', timeout, stdio: ['pipe', 'pipe', 'pipe'],
+      cwd: root, encoding: 'utf-8', timeout, stdio: ['pipe', 'pipe', 'pipe'],
     }).trim();
   } catch (err) {
     if (isTimeoutLikeError(err)) {
@@ -839,6 +861,10 @@ function gitQuiet(...args) {
     }
     throw err;
   }
+}
+
+function gitQuiet(...args) {
+  return gitQuietIn(ROOT, ...args);
 }
 
 /**
@@ -863,7 +889,7 @@ function gitQuiet(...args) {
 export function gitToplevelMismatch(root = ROOT) {
   let toplevel;
   try {
-    toplevel = gitIn(root, 'rev-parse', '--show-toplevel');
+    toplevel = gitQuietIn(root, 'rev-parse', '--show-toplevel');
   } catch {
     return null;
   }
@@ -2249,22 +2275,23 @@ async function latestRelease(runCurlGet) {
 export async function checkStatus(argv, env, ctx = {}) {
   const runCurlGet = ctx.curlGet || curlGet;
   const local = (ctx.localVersion || localVersion)();
+  const localSha = (ctx.localShortSha || localShortSha)();
   const marker = argv.includes('--force') ? null : parseDismissMarker((ctx.readMarker || readDismissMarker)());
-  if (resolveChannel(argv, env) === 'main') return checkMainChannel(local, marker, runCurlGet);
+  if (resolveChannel(argv, env) === 'main') return checkMainChannel(local, marker, runCurlGet, localSha);
 
   const latest = await latestRelease(runCurlGet);
-  if (latest.status !== 'ok') return { status: latest.status, local, ...(latest.tag ? { tag: latest.tag } : {}) };
+  if (latest.status !== 'ok') return { status: latest.status, local, ...(localSha ? { local_sha: localSha } : {}), ...(latest.tag ? { tag: latest.tag } : {}) };
   const remote = latest.version;
-  if (compareVersions(local, remote) >= 0) return { status: 'up-to-date', local, remote };
-  if (dismissalCovers(marker, remote, latest.publishedAt)) return { status: 'dismissed', local, remote };
-  return { status: 'update-available', local, remote, reason: 'version-changed', changelog: latest.changelog.slice(0, 500) };
+  if (compareVersions(local, remote) >= 0) return { status: 'up-to-date', local, remote, ...(localSha ? { local_sha: localSha } : {}) };
+  if (dismissalCovers(marker, remote, latest.publishedAt)) return { status: 'dismissed', local, remote, ...(localSha ? { local_sha: localSha } : {}) };
+  return { status: 'update-available', local, remote, ...(localSha ? { local_sha: localSha } : {}), reason: 'version-changed', changelog: latest.changelog.slice(0, 500) };
 }
 
 /**
  * check() for `--channel main`: the pre-#3845 logic, unchanged apart from
  * returning its answer and honouring a per-release dismissal.
  */
-async function checkMainChannel(local, marker, runCurlGet) {
+async function checkMainChannel(local, marker, runCurlGet, localSha) {
   let remote = '';
   let releaseVersion = '';
   let changelog = '';
@@ -2324,7 +2351,7 @@ async function checkMainChannel(local, marker, runCurlGet) {
     // empty strings, which still reaches the offline branch — that's the
     // right conservative behaviour (no version = can't determine status).
     const bothNetworkFailed = rawVersion === null && releaseRaw === null;
-    return { status: bothNetworkFailed ? 'offline' : 'no-remote-version', local };
+    return { status: bothNetworkFailed ? 'offline' : 'no-remote-version', local, ...(localSha ? { local_sha: localSha } : {}) };
   }
 
   // Use the higher version between VERSION file and GitHub Release
@@ -2366,13 +2393,13 @@ async function checkMainChannel(local, marker, runCurlGet) {
   }
 
   if (compareVersions(local, remote) >= 0 && !systemTreeDrift) {
-    return { status: 'up-to-date', local, remote, local_commit: localCommit || undefined, remote_commit: remoteCommit || undefined };
+    return { status: 'up-to-date', local, remote, local_commit: localCommit || undefined, ...(localSha ? { local_sha: localSha } : {}), remote_commit: remoteCommit || undefined };
   }
 
   // A "no" to v{remote} (drift at the same version included) holds until a
   // newer version; no release date on this channel, so a legacy timestamp
   // marker keeps covering.
-  if (dismissalCovers(marker, remote, '')) return { status: 'dismissed', local, remote };
+  if (dismissalCovers(marker, remote, '')) return { status: 'dismissed', local, remote, ...(localSha ? { local_sha: localSha } : {}) };
 
   return {
     status: 'update-available',
@@ -2380,6 +2407,7 @@ async function checkMainChannel(local, marker, runCurlGet) {
     remote,
     reason: systemTreeDrift ? 'system-files-changed' : 'version-changed',
     local_commit: localCommit || undefined,
+    ...(localSha ? { local_sha: localSha } : {}),
     remote_commit: remoteCommit || undefined,
     changelog: changelog.slice(0, 500),
   };
@@ -3367,11 +3395,12 @@ if (isCli) {
   try {
     switch (cmd) {
       case 'check': await check(); break;
+      case 'status': console.log(`career-ops v${formatLocalVersion()}`); break;
       case 'apply': await apply(); break;
       case 'rollback': rollback(); break;
       case 'dismiss': await dismiss(); break;
       default:
-        console.log('Usage: node update-system.mjs [check [--force] [--channel main]|apply --confirm [--force] [--channel main]|rollback|dismiss [--version X.Y.Z]]');
+        console.log('Usage: node update-system.mjs [check [--force] [--channel main]|status|apply --confirm [--force] [--channel main]|rollback|dismiss [--version X.Y.Z]]');
         process.exit(1);
     }
   } catch (err) {

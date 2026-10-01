@@ -6,6 +6,7 @@ import { spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { cliSubstitutionNotice, cliUnavailableError, resolveCliOrFallback } from "@/lib/clis";
+import { localISODate } from "@/lib/followups";
 import { accumulateTokens, hasNewCompletedReport, isFatalGenericStderr, killMsForKind, timeoutMessage } from "@/lib/run-cli-support.mjs";
 import { spawnHeadlessCli } from "@/lib/spawn-cli.mjs";
 import { careerOpsRoot, readMemory, findReportFile, readInbox, readScanDates, readLanguageConfig } from "@/lib/career-ops";
@@ -14,7 +15,7 @@ import { renderAndMarkPdf, writeCvHtml, pdfRunOutcome } from "@/lib/pdf-render.m
 import { createCvEnvelopeFilter, type CvEnvelope } from "@/lib/cv-envelope.mjs";
 import { buildPrompt, isShellSafeCompanyName } from "@/lib/run-prompts.mjs";
 import { capabilitiesFor } from "@/lib/worker-capabilities.mjs";
-import { fencingReport } from "@/lib/cli-fencing.mjs";
+import { fencingReport, isCliAllowedForCapabilities } from "@/lib/cli-fencing.mjs";
 import { claudeCliArgs } from "@/lib/claude-invocation.mjs";
 import { resolveCvTemplate } from "@/lib/core/cv-template.mjs";
 import { acquireTrackerWrite, releaseTrackerWrite } from "@/lib/core/run-registry";
@@ -46,6 +47,13 @@ export async function POST(req: Request) {
   // The CLI actually running: fencing, capabilities and argv below are keyed on it.
   const cliId = spec.id;
   const substitution = cliSubstitutionNotice(resolved);
+  const capabilities = capabilitiesFor(kind);
+  if (!isCliAllowedForCapabilities(cliId, capabilities)) {
+    return new Response(
+      JSON.stringify({ error: `CLI '${cliId}' cannot run write-capable worker '${kind}' without a verified permission adapter.` }),
+      { status: 400, headers: { "Content-Type": "application/json" } },
+    );
+  }
 
   // These run the REAL core (modes/scripts), not just data — fail clearly if the
   // root is incomplete instead of faking it.
@@ -89,7 +97,7 @@ export async function POST(req: Request) {
     );
   }
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localISODate();
 
   // Precompute deterministic scratch + final paths so the agent never chooses
   // its own filenames — the backend owns naming, writing (#2185) and rendering
@@ -176,7 +184,7 @@ export async function POST(req: Request) {
       binPath,
       args,
       { cwd: careerOpsRoot(), env: process.env },
-      { cliId, capabilities: capabilitiesFor(kind) },
+      { cliId, capabilities },
     );
   } catch (e) {
     // Fencing refuses an argv that contradicts the capability record, so nothing

@@ -358,6 +358,8 @@ Run:
 node generate-cover-letter.mjs --payload /tmp/cover-payload-{company-slug}.json
 ```
 
+The letter's page budget is one page (`--max-pages N` changes it). Overflow prints a warning and still renders; if it does, shorten the letter body and regenerate. Pass `--strict-pages` to make overflow fail the render.
+
 Report the output path and file size.
 
 ---

@@ -5,6 +5,7 @@
  * Usage:
  *   node generate-cover-letter.mjs --payload payload.json
  *   node generate-cover-letter.mjs --payload payload.json --out output/slug-cover.pdf
+ *   node generate-cover-letter.mjs --payload payload.json --max-pages 1 --strict-pages
  *
  * Fills templates/cover-letter-template.html with the payload, then renders
  * it to PDF via the same Playwright pipeline used for CVs (generate-pdf.mjs).
@@ -416,33 +417,95 @@ function collectInputText(value) {
   return [];
 }
 
+// One page is the norm for a cover letter. generate-pdf.mjs defaults to 2,
+// which is the CV budget, so the letter states its own instead of inheriting it.
+export const COVER_DEFAULT_MAX_PAGES = 1;
+
+const CLI_OPTIONS = {
+  payload:        { type: "string" },
+  out:            { type: "string" },
+  format:         { type: "string" },
+  country:        { type: "string" },
+  report:         { type: "string" },
+  "max-pages":    { type: "string" },
+  "strict-pages": { type: "boolean" },
+  help:           { type: "boolean", short: "h" },
+};
+
+const USAGE = `
+Usage:
+  node generate-cover-letter.mjs --payload payload.json [--out output/path.pdf] [--format letter|a4] [--country XX] [--report NNN] [--max-pages N] [--strict-pages]
+
+  --payload       Path to the JSON payload file (required)
+  --out           Override output path from payload (optional)
+  --format        Override output PDF page format (letter|a4). Defaults to
+                  config/profile.yml page_format, then letter.
+  --country       Employer's ISO 3166-1 country code (e.g. DE). Picks the sheet
+                  only when page_format is "auto". Defaults to the payload's country.
+  --report        Link the PDF to a tracker report number in data/pdf-index.tsv
+  --max-pages     Page budget for the rendered letter (default: ${COVER_DEFAULT_MAX_PAGES}).
+                  Overflow warns unless --strict-pages is given.
+  --strict-pages  Fail the render when the letter exceeds --max-pages.
+`;
+
+/**
+ * Parse the CLI arguments strictly (#6373).
+ *
+ * Non-strict parseArgs accepted everything: an unknown flag (`--max-pages`,
+ * a typo such as `--reprot`) was dropped, a valueless `--report` swallowed
+ * the next flag as its value (`--report --out x.pdf` → report "--out"), and a
+ * valueless `--out` became boolean `true` and was written to `output/true`.
+ * Strict mode rejects all three; the values it does accept are validated here
+ * so main() never sees an unusable one.
+ *
+ * @param {string[]} argv - Arguments after the script name.
+ * @returns {{ help: boolean, payload?: string, out?: string, format?: string,
+ *   country?: string, report?: string, maxPages: number, strictPages: boolean }}
+ * @throws {Error} with a user-facing message on any invalid argument.
+ */
+export function parseCoverArgs(argv) {
+  const { values } = parseArgs({ args: argv, options: CLI_OPTIONS, strict: true, allowPositionals: false });
+  if (values.report !== undefined && !/^\d+$/.test(values.report.trim())) {
+    throw new Error(`Invalid --report "${values.report}". Use a numeric report number, e.g. --report 42.`);
+  }
+  for (const name of ["payload", "out"]) {
+    if (values[name] !== undefined && values[name].trim() === "") {
+      throw new Error(`Invalid --${name} "". Give a file path.`);
+    }
+  }
+  let maxPages = COVER_DEFAULT_MAX_PAGES;
+  if (values["max-pages"] !== undefined) {
+    const raw = values["max-pages"];
+    maxPages = /^\d+$/.test(raw.trim()) ? Number(raw) : NaN;
+    if (!Number.isInteger(maxPages) || maxPages < 1) {
+      throw new Error(`Invalid --max-pages "${raw}". Use a positive integer, e.g. --max-pages 1.`);
+    }
+  }
+  return {
+    help: values.help === true,
+    payload: values.payload,
+    out: values.out,
+    format: values.format,
+    country: values.country,
+    report: values.report?.trim(),
+    maxPages,
+    strictPages: values["strict-pages"] === true,
+  };
+}
+
 /** Parse a payload, run the fact gate, and render the cover-letter PDF. */
 async function main() {
-  const { values: args } = parseArgs({
-    options: {
-      payload: { type: "string" },
-      out:     { type: "string" },
-      format:  { type: "string" },
-      country: { type: "string" },
-      report:  { type: "string" },
-      help:    { type: "boolean", short: "h" },
-    },
-    strict: false,
-  });
+  let args;
+  try {
+    args = parseCoverArgs(process.argv.slice(2));
+  } catch (err) {
+    console.error(`ERROR: ${err.message}`);
+    console.error(USAGE);
+    process.exit(1);
+  }
 
   if (args.help || !args.payload) {
-    console.log(`
-Usage:
-  node generate-cover-letter.mjs --payload payload.json [--out output/path.pdf] [--format letter|a4] [--country XX] [--report NNN]
-
-  --payload   Path to the JSON payload file (required)
-  --out       Override output path from payload (optional)
-  --format    Override output PDF page format (letter|a4). Defaults to
-              config/profile.yml page_format, then letter.
-  --country   Employer's ISO 3166-1 country code (e.g. DE). Picks the sheet
-              only when page_format is "auto". Defaults to the payload's country.
-  --report    Link the PDF to a tracker report number in data/pdf-index.tsv
-`);
+    (args.help ? console.log : console.error)(USAGE);
     process.exit(args.help ? 0 : 1);
   }
 
@@ -514,6 +577,8 @@ Usage:
       format: args.format,
       country: args.country || payload.country,
       reportNum: args.report,
+      maxPages: args.maxPages,
+      strictPages: args.strictPages,
       // Declared, never inferred: this script always renders a cover letter, and
       // the manifest must not file it as the report's CV (#3887).
       kind: 'cover',

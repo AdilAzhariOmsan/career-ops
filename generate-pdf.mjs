@@ -1329,6 +1329,18 @@ export function reorderCvSections(html, order) {
   return reordered;
 }
 
+// What enforcePageBudget calls the document, and how it says to shorten it.
+const PAGE_BUDGET_WORDING = {
+  cv: {
+    name: 'CV',
+    hint: 'Trim lower-priority bullets, older roles, secondary projects, or the competencies strip, then regenerate.',
+  },
+  cover: {
+    name: 'Cover letter',
+    hint: 'Shorten the letter body, then regenerate.',
+  },
+};
+
 /**
  * Decide whether a rendered CV fits its configured page budget.
  *
@@ -1337,10 +1349,12 @@ export function reorderCvSections(html, order) {
  * force content under the limit.
  *
  * @param {number} pageCount - Actual pages in the rendered PDF.
- * @param {{ maxPages?: number, strictPages?: boolean }} [options]
+ * @param {{ maxPages?: number, strictPages?: boolean, kind?: string }} [options]
+ *   `kind` is the artifact kind (`cv` or `cover`); it picks the wording, so a
+ *   cover letter's overflow is not reported as a CV's (#6373).
  * @returns {void}
  */
-export function enforcePageBudget(pageCount, { maxPages = 2, strictPages = false } = {}) {
+export function enforcePageBudget(pageCount, { maxPages = 2, strictPages = false, kind = 'cv' } = {}) {
   if (!Number.isInteger(pageCount) || pageCount < 1) {
     throw new Error(`Could not determine the rendered PDF page count (received ${pageCount}).`);
   }
@@ -1351,9 +1365,9 @@ export function enforcePageBudget(pageCount, { maxPages = 2, strictPages = false
 
   const actualLabel = 'pages';
   const allowedLabel = maxPages === 1 ? 'page' : 'pages';
+  const { name, hint } = PAGE_BUDGET_WORDING[kind] || PAGE_BUDGET_WORDING.cv;
   const message =
-    `CV is ${pageCount} ${actualLabel}; the allowed maximum is ${maxPages} ${allowedLabel}. ` +
-    'Trim lower-priority bullets, older roles, secondary projects, or the competencies strip, then regenerate.';
+    `${name} is ${pageCount} ${actualLabel}; the allowed maximum is ${maxPages} ${allowedLabel}. ${hint}`;
 
   if (strictPages) {
     throw new Error(`${message} (--strict-pages requested)`);
@@ -2308,7 +2322,11 @@ export async function renderHtmlToPdf(html, outputPath, opts = {}) {
       console.log(`📊 Pages: ${result.pageCount}`);
       // The painter's own warning goes nowhere, so repeat it here. A strict
       // overflow already came back as an error.
-      enforcePageBudget(result.pageCount, { maxPages: opts.maxPages ?? 2, strictPages: false });
+      enforcePageBudget(result.pageCount, {
+        maxPages: opts.maxPages ?? 2,
+        strictPages: false,
+        kind: resolveArtifactKind(opts.kind, outputPath).kind,
+      });
       console.log(`📦 Size: ${(result.size / 1024).toFixed(1)} KB`);
       return result;
     } catch (err) {
@@ -2469,6 +2487,7 @@ async function renderInPage(browser, html, outputPath, opts = {}) {
     enforcePageBudget(pageCount, {
       maxPages: opts.maxPages ?? 2,
       strictPages: opts.strictPages ?? false,
+      kind: artifactKind,
     });
 
     console.log(`✅ PDF generated: ${outputPath}`);

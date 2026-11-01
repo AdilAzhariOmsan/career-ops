@@ -1317,7 +1317,13 @@ same Playwright pipeline as CVs.
 ```bash
 npm run cover-letter -- payload.json
 node generate-cover-letter.mjs --payload payload.json --out output/slug-cover.pdf
+node generate-cover-letter.mjs --payload payload.json --max-pages 1 --strict-pages
 ```
+
+The page budget defaults to one page (a CV's is two). Overflow warns unless
+`--strict-pages` is given, which fails the render instead. Flags are parsed
+strictly: an unknown flag, or `--report`/`--out` without a value, exits 1
+before anything is written.
 
 ---
 
